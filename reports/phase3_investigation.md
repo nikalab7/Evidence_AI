@@ -2,6 +2,10 @@
 
 Date: 2026-10-24
 
+Historical snapshot before the approved Frankfurt region migration. The
+current database target and replacement investigation timings are in
+`reports/region_migration.md`.
+
 ## Scope and deployment gate
 
 The local CLI now performs hybrid retrieval and bounded Gemini investigations.

@@ -41,7 +41,8 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 84 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 106 passed
+  after the Frankfurt region migration.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
 - The previous OR-search baseline lowered equal-weight hybrid metrics on the
   former Mindo-backed subset. Phase 1E moved the same 1,000 corpus documents to
@@ -50,10 +51,12 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   ingestion beyond 1,000, Gemini RAG, citation
   validation, and final answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
-- The old Mindo database probe remains historical. The current Evidence_AI
-  target is project `csenhlrsttuukzwglttf`, uses PostgreSQL 17.11 and pgvector
-  0.8.2, and measured 18,454,195 bytes after the 1K load. The 10K/50K figures
-  remain estimates; see `reports/phase_1e_optimized.md`.
+- The old Mindo database probe remains historical. The former Sydney
+  Evidence_AI project is `csenhlrsttuukzwglttf`; the current Frankfurt target
+  is `nldnpqhqrfwjgxcqeuru`, PostgreSQL 17.11 with pgvector 0.8.2. The measured
+  Frankfurt database size after the 1K load is 18,478,771 bytes. Storage
+  projections remain estimates; see `reports/region_migration.md` and the
+  historical snapshot `reports/phase_1e_optimized.md`.
 - The owner supplied a Render startup log showing the 384-dimensional FastEmbed
   check passed, with 0.1003s embedding latency and 300,912,640 bytes peak process
   RSS. Local build-time cache and two local restart checks passed; a post-change
@@ -102,3 +105,15 @@ Local planning and personal preparation notes are excluded from the repository.
   timing details are in `reports/phase3_investigation.md`.
 - The deployed Render region, environment, and build settings were not
   accessible and are still unverified. No Render deployment was triggered.
+
+## Region migration addition — 2026-10-25
+
+- Codex assistance was used to update the fail-closed Frankfurt project
+  reference, prepare a distinct non-deployed Render Frankfurt Blueprint, and
+  run the approved 1,000-document migration and read-only verification. The
+  project owner supplied the Frankfurt endpoint and updated the local
+  credential. Mindo and Sydney were not modified.
+- Live checks measured Frankfurt connection/`SELECT 1` latency, exact corpus
+  and chunk reconstruction, security grants, retrieval, and Gemini answer and
+  abstention behavior. The full suite passed 106 tests. Actual measurements,
+  limitations, and Render follow-up steps are in `reports/region_migration.md`.

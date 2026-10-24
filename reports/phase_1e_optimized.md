@@ -5,6 +5,11 @@ Date: 2026-10-24
 Status: verified on the dedicated Evidence_AI Supabase project,
 `csenhlrsttuukzwglttf`. This report covers only the first 1,000 corpus records.
 
+Historical snapshot from 2026-10-24, before the approved Frankfurt region
+migration. The current database target and replacement measurements are in
+`reports/region_migration.md`; this report's Sydney measurements remain a
+historical baseline.
+
 ## Project isolation and safety
 
 The previous local `DATABASE_URL` pointed to the Mindo Supabase project
