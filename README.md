@@ -4,10 +4,10 @@ Multi-hop RAG investigation engine for evidence-based answers across documents.
 Planned architecture: FastAPI/Jinja2, Supabase/Postgres FTS + pgvector, fastembed
 bge-small-en-v1.5, Gemini tool calling, Render deployment.
 
-Current status: **foundation and service diagnostics implemented; application
-pipeline is not implemented yet.** Gemini generation and Supabase/vector probes
-passed. Sanitized service evidence is in `reports/service_probe.json`
-and `reports/database_probe.json`. No documents have been ingested.
+Current status: **Phase 0 skeleton.** FastAPI and `GET /health` are implemented.
+Gemini generation and Supabase/pgvector connection probes passed. No documents
+have been ingested; retrieval, RAG, UI, and deployment remain unimplemented.
+See `docs/ARCHITECTURE.md` for the folder map and current request path.
 
 ## Local setup (PowerShell, Python 3.11+)
 
@@ -16,21 +16,27 @@ python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements-dev.txt
 # Only if .env does not already exist:
 Copy-Item .env.example .env
+# Activate the isolated environment for future commands:
+.\.venv\Scripts\Activate.ps1
 .\.venv\Scripts\python -m pytest -q
-.\.venv\Scripts\python -m app.preflight
+.\.venv\Scripts\python -m uvicorn app.main:app --reload
 ```
+
+The API starts at `http://127.0.0.1:8000`; `GET /health` returns
+`{"status":"ok"}`. The project uses its small `Settings` loader in
+`app/config.py`; no extra settings framework is needed for this skeleton.
 
 Fill `.env` locally. Never commit credentials. The verified Gemini model is
 recorded in `.env`; environment variables override local `.env` values.
-The readiness command prints names/statuses, never credential values. Exit code 1
-means ingestion is not cleared; this is the expected result at this milestone.
-It inventories prerequisites and does not make network calls or ingest documents.
+`python -m app.preflight` prints readiness names/statuses, never credential
+values. Exit code 1 means ingestion is not cleared; that is expected while gates
+remain. It does not make network calls or ingest documents.
 
 ## Remaining implementation
 
 1. Audit candidate dataset uniqueness and evaluation supporting evidence, including sentence coverage and split separation.
-2. Measure actual Render RAM/latency with the intended embedding model; then the 100-document vertical slice.
-3. Stage 1k and 10k loads and measure database/index size before approving 50k.
+2. Measure actual Render RAM/latency with the intended embedding model before ingestion.
+3. Implement ingestion milestones and test 100 → 1k → 10k before considering 50k.
 
 Live service probe commands (use local `.env`; do not paste secrets into commands):
 

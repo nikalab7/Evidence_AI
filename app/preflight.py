@@ -8,7 +8,7 @@ from app.config import Settings
 def readiness_report(settings: Settings) -> dict:
     missing = settings.missing_names()
     return {
-        "milestone": "phase-0.2-assignment-review",
+        "milestone": "phase-0-readiness",
         "full_scale_ingestion_allowed": False,
         "configuration": {
             "status": "missing" if missing else "configured_unverified",
