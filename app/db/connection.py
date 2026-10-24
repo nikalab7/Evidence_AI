@@ -10,7 +10,7 @@ import psycopg
 from app.config import Settings
 
 
-EXPECTED_SUPABASE_PROJECT_REF = "csenhlrsttuukzwglttf"
+EXPECTED_SUPABASE_PROJECT_REF = "nldnpqhqrfwjgxcqeuru"
 _PROJECT_REF_RE = re.compile(r"^[a-z0-9]{20}$")
 
 

@@ -4,13 +4,13 @@ from app.config import Settings
 from app.db import connection
 
 
-PROJECT_REF = "csenhlrsttuukzwglttf"
+PROJECT_REF = "nldnpqhqrfwjgxcqeuru"
 
 
 @pytest.mark.parametrize(
     "url",
     [
-        f"postgresql://postgres.{PROJECT_REF}:secret@aws-0-eu-north-1.pooler.supabase.com:6543/postgres",
+        f"postgresql://postgres.{PROJECT_REF}:secret@aws-1-eu-central-1.pooler.supabase.com:6543/postgres",
         f"postgresql://postgres:secret@db.{PROJECT_REF}.supabase.co:5432/postgres",
     ],
 )
@@ -23,6 +23,7 @@ def test_project_identity_is_derived_only_from_supabase_database_endpoints(url):
     [
         "postgresql://postgres:secret@aws-0-eu-north-1.pooler.supabase.com:6543/postgres",
         "postgresql://postgres.umbayvfikvxjzhxojofn:secret@aws-0-eu-north-1.pooler.supabase.com/postgres",
+        "postgresql://postgres.csenhlrsttuukzwglttf:secret@aws-1-ap-southeast-2.pooler.supabase.com/postgres",
         "postgresql://postgres:secret@db.other-project.supabase.co:5432/postgres",
         "not-a-url",
     ],
@@ -40,7 +41,7 @@ def test_unknown_or_wrong_project_identity_fails_before_connect(url, monkeypatch
 
 
 def test_verified_project_identity_is_passed_to_psycopg_without_logging(monkeypatch):
-    url = f"postgresql://postgres.{PROJECT_REF}:private-value@aws-0-eu-north-1.pooler.supabase.com:6543/postgres"
+    url = f"postgresql://postgres.{PROJECT_REF}:private-value@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
     monkeypatch.setattr(connection.Settings, "load", lambda: Settings(database_url=url))
     calls = []
     marker = object()

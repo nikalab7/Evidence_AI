@@ -1,0 +1,25 @@
+# Create this as a separate Render Blueprint using this file's custom path.
+# Its distinct service name preserves the existing Sydney service.
+services:
+  - type: web
+    name: evidence-ai-frankfurt
+    runtime: python
+    region: frankfurt
+    plan: free
+    autoDeployTrigger: "off"
+    buildCommand: pip install -r requirements.txt && python scripts/download_model.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENABLE_EMBEDDING_STARTUP_CHECK
+        value: "true"
+      - key: FASTEMBED_MODEL
+        value: BAAI/bge-small-en-v1.5
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

@@ -40,7 +40,9 @@ refresh those vectors. GIN indexes FTS and HNSW on `halfvec_cosine_ops` is built
 by the bounded ingestion CLI only after the 1,000-row load.
 
 All EvidenceAI DB connections validate the Supabase project reference against
-`csenhlrsttuukzwglttf` before connecting. The three tables use RLS; `PUBLIC`,
+`nldnpqhqrfwjgxcqeuru` before connecting. This is the configured Frankfurt
+Evidence_AI target; Sydney remains a fallback and is not used by the app. The
+three tables use RLS; `PUBLIC`,
 `anon`, and `authenticated` have no table grants. Direct database credentials
 remain backend-only. The previous Mindo project is not used by the app. Live
 measurements and limitations are in `reports/phase_1e_optimized.md`.
