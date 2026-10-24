@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-The Phase 0 foundation includes environment configuration, live service probes, a FastAPI application, `GET /health`, and a Render startup-only FastEmbed check. The supplied Render log confirms 384 dimensions, 100.3 ms query embedding, and 300,912,640 bytes peak process RSS; the recorded Render memory gate is verified. A post-cache Render deployment/restart check remains pending. The local corpus audit found 50,000 unique content records with full selected-evidence coverage, but the two large JSONL outputs remain deferred. No records have been inserted into Supabase. Retrieval, RAG, document APIs, and the user-facing demo are not implemented.
+The Phase 0 foundation and the verified 100-document Phase 1C ingestion slice are complete. Supabase contains 100 content-addressed documents, 100 provenance rows, and 100 paragraph chunks with 384-dimensional BGE embeddings. The selected 50,000-record corpus is generated locally; only the 100-document slice has been ingested. Full-scale capacity, 1,000-document ingestion, retrieval, RAG, document APIs, and the user-facing demo remain incomplete. The prior Render baseline is recorded, but a post-cache Render deployment/restart check remains pending. See [`reports/ingestion_100.md`](reports/ingestion_100.md).
 
 ## Project structure
 
@@ -15,24 +15,24 @@ evidence-ai/
 │   ├── main.py                 FastAPI entry point
 │   ├── lifespan.py             Optional startup-only embedding smoke check
 │   ├── embedding_smoke.py      FastEmbed dimensions, timing, and RSS
-│   ├── model_cache.py          Shared build/runtime model cache verification
+│   ├── model_cache.py          Offline FastEmbed cache loader
 │   ├── config.py               Environment configuration
 │   ├── api/
 │   │   ├── health.py           Working liveness route
 │   │   ├── documents.py        Placeholder
 │   │   └── investigations.py   Placeholder
 │   ├── db/
-│   │   ├── connection.py       Placeholder; service probe is separate
-│   │   └── queries.py           Placeholder
+│   │   ├── connection.py       TLS psycopg connection from environment settings
+│   │   └── queries.py          Parameterized ingestion, verification, and size queries
 │   ├── ingestion/
 │   │   ├── corpus_core.py       Text normalization and evidence coverage
 │   │   ├── corpus_store.py      Content hashes, aliases, and collision stats
 │   │   ├── corpus_selection.py  Fixed-seed stratified question selection
 │   │   └── hotpotqa_corpus.py   Local pinned corpus build and audit
-│   │   ├── parsers.py           Placeholder
-│   │   ├── chunkers.py          Placeholder
-│   │   ├── deduplication.py     Placeholder
-│   │   └── indexer.py            Placeholder
+│   │   ├── parsers.py           Placeholder for file-upload ingestion
+│   │   ├── chunkers.py          Paragraph chunker for Phase 1C
+│   │   ├── deduplication.py     Stable document, source, and chunk IDs
+│   │   └── indexer.py            Metadata preparation and local embeddings
 │   ├── retrieval/
 │   │   ├── semantic.py          Placeholder
 │   │   ├── keyword.py           Placeholder
@@ -52,13 +52,13 @@ evidence-ai/
 │   │   ├── library.html         Static notice
 │   │   └── investigate.html     Static notice
 │   └── static/                  Future CSS and JavaScript
-├── migrations/schema.sql        Documentation placeholder; not applied
+├── migrations/schema.sql        Additive documents, provenance, chunks, FTS, and vector schema
 ├── scripts/
 │   ├── audit_hotpotqa.py       Streaming uniqueness/evidence audit
 │   ├── build_corpus.py          Local corpus selection and coverage report
 │   ├── download_model.py        Render build-time FastEmbed cache
-│   ├── ingest_hotpotqa.py       Placeholder
-│   └── measure_db_size.py       Placeholder
+│   ├── ingest_hotpotqa.py       Capped 100-document Supabase ingestion CLI
+│   └── measure_db_size.py       Read-only database/table size and row counts
 ├── tests/                       Automated tests
 ├── eval/                         Retrieval dev and eval candidate cases
 ├── reports/                     Sanitized service evidence and AI usage report
@@ -87,15 +87,16 @@ python -m scripts.audit_hotpotqa --output reports\hotpotqa_audit.json
 ```
 
 The source-pool scan found 507,494 title-plus-paragraph records across train
-and validation. Content-hash subset selection is now audited separately;
-materializing its large JSONL files and measuring Supabase staged capacity
-remain open. No database ingestion has started.
+and validation. The fixed-seed content-hash subset has been materialized: the
+200-question retrieval set is committed, and the 50,000-document corpus remains
+local and Git-ignored. Exactly 100 corpus records are currently in Supabase;
+larger staged loads and capacity projections remain open.
 
 The selected local subset and its reproducibility record are in
 [`reports/corpus_audit.json`](reports/corpus_audit.json). Sampling and identity
 rules are documented in [`docs/HOTPOTQA_CORPUS_BUILD.md`](docs/HOTPOTQA_CORPUS_BUILD.md).
-The default builder writes only the report and 40 candidate questions; it needs
-`--write-large-files` to create the 200-question retrieval set and local
+The default builder writes the report and 40 candidate questions; use
+`--write-large-files` to regenerate the 200-question retrieval set and local
 50,000-record corpus.
 
 ## Local setup (PowerShell, Python 3.11+)
@@ -122,7 +123,7 @@ Keep real credentials in `.env`, which Git ignores. `.env.example` contains name
 
 The first command lists available generation models and makes at most one small Gemini request. The second checks Supabase and `pgvector` without spending Gemini quota. Reports omit credentials and raw service error bodies. A successful connection and current database size do not prove that 50,000 records will fit.
 
-The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. The database was 20,491,411 bytes before ingestion. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; a new Render build/restart check remains pending. The source-pool audit found 507,494 unique title-plus-paragraph records; the selected content-hash corpus separately contains 50,000 records with all selected evidence present. Supabase quota/capacity and final evaluation cases remain open. See the reports in `reports/`.
+The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. The database was 20,491,411 bytes before Phase 1C and measured 22,195,347 bytes after the 100-document slice and idempotence check; see [`reports/ingestion_100.md`](reports/ingestion_100.md) for the measured size change and row counts. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; a new Render build/restart check remains pending. Supabase full-scale capacity and final evaluation cases remain open. See the reports in `reports/`.
 
 ## Render embedding preflight
 

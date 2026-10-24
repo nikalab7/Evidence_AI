@@ -77,8 +77,10 @@ a retrieval-quality result.
 The new content-hash corpus selection and evidence audit are recorded separately
 in [`reports/corpus_audit.json`](../reports/corpus_audit.json). That local-only
 run reached 50,000 unique paragraph texts and 100% selected support coverage.
-Its large JSONL outputs have not been materialized yet, and no records have
-been inserted into Supabase.
+The selected files have since been materialized. `data/corpus.jsonl` remains
+local and Git-ignored, and exactly 100 unique documents from it have been
+ingested into Supabase in Phase 1C. This 100-document slice is not a full-scale
+capacity result.
 
 The validation split contains 5,918 bridge and 1,487 comparison questions, all
 marked `hard` in this dataset revision. It does not supply absent-answer or

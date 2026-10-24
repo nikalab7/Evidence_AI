@@ -20,9 +20,9 @@
 ```
 
 The default command streams the pinned train split twice. It writes the compact
-audit report and 40-line `eval/eval_candidates.jsonl`, while deferring the
-200-line `eval/retrieval_dev.jsonl` and 50,000-line `data/corpus.jsonl`. After
-approval to materialize those larger files, run:
+audit report and 40-line `eval/eval_candidates.jsonl`. The larger outputs were
+materialized with `--write-large-files`: `eval/retrieval_dev.jsonl` is committed,
+while `data/corpus.jsonl` is local and Git-ignored. To regenerate them, run:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\build_corpus.py --write-large-files

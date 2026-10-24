@@ -22,14 +22,17 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   recorded Render measurements.
 - Fixed-seed HotpotQA train selection, content-hash deduplication, source-title
   collision preservation, and title-plus-sentence coverage tests.
+- Phase 1C additive Supabase schema, paragraph chunking, stable source/chunk IDs,
+  local BGE embeddings, parameterized psycopg ingestion, and live size, cosine,
+  fresh-connection, and idempotence checks for the capped 100-document slice.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 43 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 48 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- API, database, retrieval, LLM, reasoning, and evaluation modules remain placeholders
-  where their implementation milestones have not started; local corpus preparation
-  does not claim database ingestion or RAG behavior.
+- The 100-document ingestion milestone is verified against Supabase. File-upload
+  parsers, 1,000+ staged ingestion, retrieval, RAG, citation validation, and
+  answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0
   was enabled and a cosine smoke query passed. Baseline database size: 20,491,411
@@ -54,8 +57,11 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No database ingestion, retrieval, ranking, citation validation, agentic loop, or
-  evaluation-quality metrics are implemented or claimed.
+- No ingestion beyond the first 100 documents, retrieval, ranking, citation
+  validation, agentic loop, or evaluation-quality metrics are implemented or claimed.
+- The ingestion report records the actual first-run database size change and a
+  later size increase observed across a zero-insert rerun; the cause of that
+  increase was not established. See reports/ingestion_100.md.
 - Independent non-AI implementation contributions are not recorded at this stage.
 
 Local planning and personal preparation notes are excluded from the repository.
