@@ -1,0 +1,25 @@
+{
+  "milestone": "phase-0.3-service-probes",
+  "checked_at_utc": "2026-10-24T14:06:47.888349+00:00",
+  "gemini": {
+    "status": "skipped"
+  },
+  "supabase": {
+    "status": "passed",
+    "capacity_verified": false,
+    "connection": true,
+    "vector_available": true,
+    "vector_enabled_by_probe": true,
+    "vector_installed": true,
+    "vector_version": "0.8.0",
+    "cosine_smoke_passed": true,
+    "database_size_bytes": 20491411,
+    "elapsed_seconds": 3.565
+  },
+  "full_scale_ingestion_allowed": false,
+  "limitations": [
+    "No quota capacity proof from one successful generation.",
+    "Database connection and current size do not verify 50k capacity.",
+    "Dataset uniqueness, evaluation coverage and Render memory remain unverified."
+  ]
+}

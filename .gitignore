@@ -1,0 +1,18 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/raw/
+data/cache/
+.cache/
+
+# Local development instructions, planning, and interview notes
+/AGENTS.md
+/CLAUDE.md
+/docs/IMPLEMENTATION_PLAN_V1.0.txt
+/docs/UPGAMING_ASSIGNMENT.md
+/docs/REQUIREMENTS_MAP.md
+/reports/PHASE_0.md
