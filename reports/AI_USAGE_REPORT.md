@@ -28,14 +28,18 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
 - Phase 1D configurable ingestion limit with a hard 1,000-document ceiling,
   read-only database/table/index/vector-size measurement, and live 100-to-1,000
   Supabase capacity verification, cosine latency benchmark, and idempotence check.
+- Phase 2 semantic and PostgreSQL FTS retrievers, a shared local search interface,
+  deterministic Weighted RRF, an evidence-gated retrieval evaluator, and real
+  Supabase retrieval measurements on the 82 dev questions fully represented in
+  the indexed 1,000-document subset.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 51 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 66 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- The 1,000-document ingestion milestone is verified against Supabase. File-upload
-  parsers, ingestion beyond 1,000, retrieval, RAG, citation validation, and
-  answer-quality evaluation remain incomplete and are not claimed.
+- The 1,000-document ingestion and Phase 2 retrieval baseline are verified against
+  Supabase. File-upload parsers, ingestion beyond 1,000, Gemini RAG, citation
+  validation, and final answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0
   was enabled and a cosine smoke query passed. Baseline database size: 20,491,411
@@ -60,8 +64,9 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No ingestion beyond the first 1,000 documents, retrieval, ranking, citation
-  validation, agentic loop, or evaluation-quality metrics are implemented or claimed.
+- No ingestion beyond 1,000 documents, Gemini RAG, citation validation, agentic
+  loop, or answer-quality metrics are implemented or claimed. Phase 2 retrieval
+  metrics are title-level only; they do not measure answer correctness or entailment.
 - The ingestion report records the actual first-run database size change and a
   later size increase observed across a zero-insert rerun; the cause of that
   increase was not established. See reports/ingestion_100.md.

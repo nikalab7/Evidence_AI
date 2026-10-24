@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from psycopg import Connection, sql
@@ -199,6 +200,20 @@ def read_database_document_ids(conn: Connection) -> set[str]:
     return {row[0] for row in conn.execute("SELECT doc_id FROM public.documents").fetchall()}
 
 
+def read_indexed_source_evidence(conn: Connection) -> list[dict[str, Any]]:
+    """Read source evidence with its indexed paragraph text for coverage gating."""
+    return [
+        {"source_id": row[0], "title_normalized": row[1], "sentences": row[2], "chunk_text": row[3]}
+        for row in conn.execute(
+            """SELECT s.source_id, s.title_normalized, s.sentences, c.chunk_text
+               FROM public.document_sources s
+               JOIN public.chunks c ON c.doc_id = s.doc_id
+                                    AND c.chunking_strategy = 'paragraph'
+               ORDER BY s.source_id, c.chunk_position, c.chunk_id"""
+        ).fetchall()
+    ]
+
+
 def insert_batch(conn: Connection, documents: Sequence[dict[str, Any]]) -> dict[str, int]:
     """Insert one transaction batch without updating or deleting existing records."""
     document_rows, source_rows, chunk_rows = [], [], []
@@ -308,6 +323,136 @@ def verify_target_documents(conn: Connection, doc_ids: Sequence[str]) -> dict[st
         "total_documents": total_documents,
         "total_chunks": total_chunks,
     }
+
+
+_RETRIEVAL_FILTER_COLUMNS = {
+    "chunking_strategy": "chunking_strategy",
+    "embedding_model": "embedding_model",
+}
+
+
+def _retrieval_filter_sql(filters: Mapping[str, str] | None) -> tuple[sql.Composable, list[str]]:
+    """Build a small filter whitelist using SQL identifiers and bound values."""
+    if filters is None:
+        return sql.SQL("TRUE"), []
+    if not isinstance(filters, Mapping):
+        raise TypeError("retrieval filters must be a mapping")
+
+    clauses: list[sql.Composable] = []
+    values: list[str] = []
+    for key in sorted(filters):
+        value = filters[key]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"retrieval filter {key!r} must be a non-empty string")
+        if key == "source_split":
+            clauses.append(sql.SQL(
+                "EXISTS (SELECT 1 FROM public.document_sources sf "
+                "WHERE sf.doc_id = c.doc_id AND sf.source_split = %s)"
+            ))
+        elif key in _RETRIEVAL_FILTER_COLUMNS:
+            clauses.append(sql.SQL("c.{} = %s").format(
+                sql.Identifier(_RETRIEVAL_FILTER_COLUMNS[key]),
+            ))
+        else:
+            raise ValueError(f"unsupported retrieval filter: {key}")
+        values.append(value)
+    return sql.SQL(" AND ").join(clauses) if clauses else sql.SQL("TRUE"), values
+
+
+def _search_result_rows(rows: Sequence[tuple[Any, ...]], score_name: str) -> list[dict[str, Any]]:
+    """Map a parameterized retrieval query row to stable, source-aware hit data."""
+    return [{
+        "chunk_id": row[0],
+        "doc_id": row[1],
+        "chunk_position": row[2],
+        "chunk_text": row[3],
+        "metadata": row[4],
+        "sources": row[5] or [],
+        score_name: float(row[6]),
+    } for row in rows]
+
+
+def semantic_search_chunks(
+    conn: Connection,
+    vector: Sequence[float],
+    *,
+    limit: int = 10,
+    filters: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Run pgvector cosine retrieval and include paragraph titles and provenance."""
+    if len(vector) != 384 or not all(math.isfinite(float(value)) for value in vector):
+        raise ValueError("query embedding must contain 384 finite values")
+    if not 1 <= limit <= 100:
+        raise ValueError("retrieval limit must be between 1 and 100")
+    filter_sql, filter_values = _retrieval_filter_sql(filters)
+    literal = "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
+    statement = sql.SQL(
+        """WITH query_vector AS (
+               SELECT %s::extensions.vector(384) AS embedding
+           )
+           SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunk_text, d.metadata,
+                  COALESCE(p.sources, '[]'::jsonb) AS sources,
+                  c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance
+           FROM public.chunks c
+           JOIN public.documents d ON d.doc_id = c.doc_id
+           CROSS JOIN query_vector q
+           LEFT JOIN LATERAL (
+               SELECT jsonb_agg(jsonb_build_object(
+                          'source_id', s.source_id,
+                          'title_alias', s.title_alias,
+                          'source_url', s.source_url,
+                          'source_revision', s.source_revision,
+                          'source_split', s.source_split
+                      ) ORDER BY s.title_normalized, s.source_id) AS sources
+               FROM public.document_sources s WHERE s.doc_id = c.doc_id
+           ) p ON TRUE
+           WHERE {}
+           ORDER BY c.embedding OPERATOR(extensions.<=>) q.embedding, c.chunk_id
+           LIMIT %s"""
+    ).format(filter_sql)
+    rows = conn.execute(statement, (literal, *filter_values, limit)).fetchall()
+    return _search_result_rows(rows, "cosine_distance")
+
+
+def keyword_search_chunks(
+    conn: Connection,
+    query: str,
+    *,
+    limit: int = 10,
+    filters: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Run indexed PostgreSQL English FTS using websearch syntax and ts_rank_cd."""
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("search query must be a non-empty string")
+    if not 1 <= limit <= 100:
+        raise ValueError("retrieval limit must be between 1 and 100")
+    filter_sql, filter_values = _retrieval_filter_sql(filters)
+    statement = sql.SQL(
+        """WITH search_query AS (
+               SELECT websearch_to_tsquery('english', %s) AS tsquery
+           )
+           SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunk_text, d.metadata,
+                  COALESCE(p.sources, '[]'::jsonb) AS sources,
+                  ts_rank_cd(c.tsv, q.tsquery) AS keyword_score
+           FROM public.chunks c
+           JOIN public.documents d ON d.doc_id = c.doc_id
+           CROSS JOIN search_query q
+           LEFT JOIN LATERAL (
+               SELECT jsonb_agg(jsonb_build_object(
+                          'source_id', s.source_id,
+                          'title_alias', s.title_alias,
+                          'source_url', s.source_url,
+                          'source_revision', s.source_revision,
+                          'source_split', s.source_split
+                      ) ORDER BY s.title_normalized, s.source_id) AS sources
+               FROM public.document_sources s WHERE s.doc_id = c.doc_id
+           ) p ON TRUE
+           WHERE c.tsv @@ q.tsquery AND {}
+           ORDER BY keyword_score DESC, c.chunk_id
+           LIMIT %s"""
+    ).format(filter_sql)
+    rows = conn.execute(statement, (query, *filter_values, limit)).fetchall()
+    return _search_result_rows(rows, "keyword_score")
 
 
 def cosine_search(conn: Connection, vector: Sequence[float], limit: int = 5) -> list[dict[str, Any]]:

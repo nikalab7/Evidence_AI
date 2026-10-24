@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-The Phase 0 foundation and verified Phase 1C/1D ingestion milestones are complete. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The selected 50,000-record corpus is generated locally; no more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Retrieval, RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
+Phase 0, Phase 1C/1D, and the Phase 2 retrieval baseline are complete. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The 200-question retrieval-dev set has 82 cases with complete supporting evidence in those chunks; semantic, FTS, and Weighted RRF results are recorded in [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Gemini RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
 
 ## Project structure
 
@@ -23,7 +23,7 @@ evidence-ai/
 │   │   └── investigations.py   Placeholder
 │   ├── db/
 │   │   ├── connection.py       TLS psycopg connection from environment settings
-│   │   └── queries.py          Parameterized ingestion, verification, and size queries
+│   │   └── queries.py          Parameterized ingestion, retrieval, verification, and size queries
 │   ├── ingestion/
 │   │   ├── corpus_core.py       Text normalization and evidence coverage
 │   │   ├── corpus_store.py      Content hashes, aliases, and collision stats
@@ -34,9 +34,10 @@ evidence-ai/
 │   │   ├── deduplication.py     Stable document, source, and chunk IDs
 │   │   └── indexer.py            Metadata preparation and local embeddings
 │   ├── retrieval/
-│   │   ├── semantic.py          Placeholder
-│   │   ├── keyword.py           Placeholder
-│   │   └── ranker.py            Placeholder
+│   │   ├── engine.py            Shared semantic/keyword/hybrid interface
+│   │   ├── semantic.py          BGE + pgvector cosine retrieval
+│   │   ├── keyword.py           PostgreSQL FTS retrieval
+│   │   └── ranker.py            Weighted Reciprocal Rank Fusion
 │   ├── llm/
 │   │   ├── gemini_client.py     Placeholder; service probe is separate
 │   │   ├── agent.py             Placeholder
@@ -46,7 +47,7 @@ evidence-ai/
 │   │   ├── citations.py         Placeholder
 │   │   └── abstention.py        Placeholder
 │   ├── evaluation/
-│   │   ├── metrics.py           Placeholder
+│   │   ├── metrics.py           Evidence-gated Recall@K and MRR
 │   │   └── run.py               Placeholder
 │   ├── templates/
 │   │   ├── library.html         Static notice
@@ -58,6 +59,8 @@ evidence-ai/
 │   ├── build_corpus.py          Local corpus selection and coverage report
 │   ├── download_model.py        Render build-time FastEmbed cache
 │   ├── ingest_hotpotqa.py       Supabase ingestion CLI capped at 1,000 documents
+│   ├── retrieve.py              Natural-language semantic/keyword/hybrid CLI
+│   ├── evaluate_retrieval.py    Evidence-gated real Supabase retrieval evaluation
 │   └── measure_db_size.py       Read-only database/table size and row counts
 ├── tests/                       Automated tests
 ├── eval/                         Retrieval dev and eval candidate cases
@@ -89,8 +92,8 @@ python -m scripts.audit_hotpotqa --output reports\hotpotqa_audit.json
 The source-pool scan found 507,494 title-plus-paragraph records across train
 and validation. The fixed-seed content-hash subset has been materialized: the
 200-question retrieval set is committed, and the 50,000-document corpus remains
-local and Git-ignored. Exactly 100 corpus records are currently in Supabase;
-larger staged loads and capacity projections remain open.
+local and Git-ignored. Exactly 1,000 corpus documents are currently in Supabase;
+larger staged loads remain open and 10K/50K capacity figures are estimates.
 
 The selected local subset and its reproducibility record are in
 [`reports/corpus_audit.json`](reports/corpus_audit.json). Sampling and identity
