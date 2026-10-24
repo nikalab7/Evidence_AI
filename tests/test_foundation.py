@@ -83,14 +83,14 @@ def test_secret_and_raw_dataset_paths_are_ignored_by_git_rules(tmp_path):
     result = subprocess.run(
         ["git", "check-ignore", "--no-index", "-z", "--stdin"], cwd=tmp_path,
         input=(b".env\0.env.production\0data/raw/hotpot.json\0.env.example\0"
-               b"AGENTS.md\0CLAUDE.md\0docs/IMPLEMENTATION_PLAN_V1.0.txt\0"
+               b"AGENTS.md\0AGENTS.local.md\0CLAUDE.md\0docs/IMPLEMENTATION_PLAN_V1.0.txt\0"
                b"docs/UPGAMING_ASSIGNMENT.md\0docs/REQUIREMENTS_MAP.md\0reports/PHASE_0.md\0"
                b"README.md\0reports/AI_USAGE_REPORT.md\0app/config.py\0"),
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.split(b"\0") == [
-        b".env", b".env.production", b"data/raw/hotpot.json", b"AGENTS.md", b"CLAUDE.md",
+        b".env", b".env.production", b"data/raw/hotpot.json", b"AGENTS.local.md", b"CLAUDE.md",
         b"docs/IMPLEMENTATION_PLAN_V1.0.txt", b"docs/UPGAMING_ASSIGNMENT.md",
         b"docs/REQUIREMENTS_MAP.md", b"reports/PHASE_0.md", b"",
     ]

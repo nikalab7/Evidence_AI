@@ -1,0 +1,2 @@
+-- Schema placeholder. No database tables or indexes are created by this file.
+-- Add versioned DDL with the ingestion/database milestone after schema review.

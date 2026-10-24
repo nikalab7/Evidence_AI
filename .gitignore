@@ -10,7 +10,7 @@ data/cache/
 .cache/
 
 # Local development instructions, planning, and interview notes
-/AGENTS.md
+/AGENTS.local.md
 /CLAUDE.md
 /docs/IMPLEMENTATION_PLAN_V1.0.txt
 /docs/UPGAMING_ASSIGNMENT.md
