@@ -88,4 +88,21 @@ The first command lists available generation models and makes at most one small 
 
 The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. The database was 20,491,411 bytes before ingestion. Dataset coverage, quota capacity, staged database capacity, and Render memory are unverified. See the JSON reports in `reports/`.
 
+## Render embedding preflight
+
+`render.yaml` configures a minimal Python web service and a startup-only
+FastEmbed check. On each process start it loads `BAAI/bge-small-en-v1.5`, embeds
+one query, and writes dimensions, load time, query latency, and process RSS to
+service logs. `/health` remains a cheap liveness check; model measurements are
+not exposed by an HTTP route. Swagger and OpenAPI routes are disabled.
+
+Create a Blueprint from this repository in Render to run the preflight. No
+Gemini or Supabase secret is required for this isolated check. Render's Free
+filesystem is ephemeral, so model cache downloads may recur after restart or
+spin-down; the startup logs will show the actual timing and memory each time.
+Automatic deploys are disabled in the Blueprint; start the first deployment
+from Render, then use the same service's restart action for the second check.
+The measured Windows baseline and the checks that remain pending are recorded
+in [reports/render_preflight_local.md](reports/render_preflight_local.md).
+
 An exact quote match shows that text occurs in a source; factual entailment requires a separate check.

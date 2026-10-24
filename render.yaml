@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: evidence-ai
+    runtime: python
+    plan: free
+    autoDeployTrigger: "off"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENABLE_EMBEDDING_STARTUP_CHECK
+        value: "true"
+      - key: FASTEMBED_MODEL
+        value: BAAI/bge-small-en-v1.5
+      - key: FASTEMBED_THREADS
+        value: "1"
