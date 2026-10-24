@@ -115,6 +115,38 @@ def test_keyword_sql_binds_user_query_and_filter_values():
     )
     assert conn.params == (query, "paragraph", "train", 10)
     assert "DROP TABLE" not in str(conn.statement)
+    rendered = str(conn.statement)
+    assert "WITH RECURSIVE" in rendered
+    assert "tsvector_to_array(to_tsvector('english'" in rendered
+    assert "plainto_tsquery('english'" in rendered
+    assert "query_fold.tsquery || query_terms.term_query" in rendered
+    assert "websearch_to_tsquery" not in rendered
+
+
+@pytest.mark.parametrize("query", ["", "   ", "\t\n"])
+def test_empty_keyword_query_returns_no_results_without_database_call(query):
+    class Connection:
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("empty query must not reach the database")
+
+    assert keyword_search_chunks(Connection(), query) == []
+
+
+def test_keyword_query_preserves_punctuation_and_duplicate_terms_as_bound_input():
+    class Result:
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def execute(self, statement, params):
+            self.statement = statement
+            self.params = params
+            return Result()
+
+    conn = Connection()
+    query = "Runners, running RUNNER! \"OR\" -- 'quoted'"
+    assert keyword_search_chunks(conn, query) == []
+    assert conn.params == (query, 10)
 
 
 def test_engine_returns_source_titles_excerpts_and_ranked_scores(monkeypatch):
@@ -130,6 +162,10 @@ def test_engine_returns_source_titles_excerpts_and_ranked_scores(monkeypatch):
     assert results[0]["text_excerpt"] == "Text for c1"
     assert results[0]["score"] == 0.2
     assert results[0]["rank"] == 1
+
+
+def test_engine_returns_empty_results_for_blank_keyword_query_without_database_call():
+    assert search(object(), "  ", mode="keyword") == []
 
 
 def test_evidence_gate_requires_all_normalized_title_sentence_pairs():

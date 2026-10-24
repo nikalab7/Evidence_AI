@@ -57,7 +57,11 @@ def search(
     """Retrieve stable, provenance-aware chunk results with one ranked API."""
     if mode not in ("semantic", "keyword", "hybrid"):
         raise ValueError(f"unsupported retrieval mode: {mode}")
-    if not isinstance(query, str) or not query.strip():
+    if not isinstance(query, str):
+        raise ValueError("search query must be a string")
+    if not query.strip():
+        if mode == "keyword":
+            return []
         raise ValueError("search query must be a non-empty string")
     if not 1 <= limit <= 100:
         raise ValueError("result limit must be between 1 and 100")

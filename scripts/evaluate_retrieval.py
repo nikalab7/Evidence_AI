@@ -103,6 +103,7 @@ def run_evaluation(
     semantic_weight: float = 1.0,
     keyword_weight: float = 1.0,
     rrf_k: int = 60,
+    details_json: Path | None = None,
 ) -> dict[str, Any]:
     if not 1 <= top_k <= candidate_k <= 100:
         raise ValueError("retrieval evaluation requires 1 <= top_k <= candidate_k <= 100")
@@ -191,6 +192,43 @@ def run_evaluation(
             },
         })
 
+    if details_json is not None:
+        details = {
+            "indexed_documents": indexed_documents,
+            "dev_questions_total": len(questions),
+            "eligible_questions": len(eligible),
+            "excluded_questions": len(excluded),
+            "top_k": top_k,
+            "candidate_k": candidate_k,
+            "hybrid_weights": {
+                "semantic": semantic_weight,
+                "keyword": keyword_weight,
+                "rrf_k": rrf_k,
+            },
+            "metrics": metrics,
+            "latency": {
+                mode: _percentiles(values) for mode, values in latency.items()
+            },
+            "per_question": [
+                {
+                    "question_id": question["question_id"],
+                    "modes": {
+                        mode: {
+                            "metrics": example_data[question["question_id"]][mode]["metrics"],
+                            "top_hits": _compact_hits(
+                                question,
+                                example_data[question["question_id"]][mode]["hits"],
+                                limit=top_k,
+                            ),
+                        }
+                        for mode in ("semantic", "keyword", "hybrid")
+                    },
+                }
+                for question in eligible
+            ],
+        }
+        details_json.write_text(json.dumps(details, indent=2), encoding="utf-8")
+
     return {
         "status": "passed",
         "dataset": str(dev_path.relative_to(PROJECT_ROOT)) if dev_path.is_relative_to(PROJECT_ROOT) else str(dev_path),
@@ -220,6 +258,10 @@ def main() -> int:
     parser.add_argument("--semantic-weight", type=float, default=1.0)
     parser.add_argument("--keyword-weight", type=float, default=1.0)
     parser.add_argument("--rrf-k", type=int, default=60)
+    parser.add_argument(
+        "--details-json", type=Path,
+        help="optional path for per-question metrics and ranked result IDs",
+    )
     args = parser.parse_args()
     try:
         report = run_evaluation(
@@ -229,6 +271,7 @@ def main() -> int:
             semantic_weight=args.semantic_weight,
             keyword_weight=args.keyword_weight,
             rrf_k=args.rrf_k,
+            details_json=args.details_json,
         )
     except psycopg.Error as exc:
         print(json.dumps({

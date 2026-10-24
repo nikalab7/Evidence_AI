@@ -421,15 +421,34 @@ def keyword_search_chunks(
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run indexed PostgreSQL English FTS using websearch syntax and ts_rank_cd."""
-    if not isinstance(query, str) or not query.strip():
-        raise ValueError("search query must be a non-empty string")
+    """Run English FTS with an OR of PostgreSQL-normalized query lexemes."""
+    if not isinstance(query, str):
+        raise ValueError("search query must be a string")
     if not 1 <= limit <= 100:
         raise ValueError("retrieval limit must be between 1 and 100")
+    if not query.strip():
+        return []
     filter_sql, filter_values = _retrieval_filter_sql(filters)
     statement = sql.SQL(
-        """WITH search_query AS (
-               SELECT websearch_to_tsquery('english', %s) AS tsquery
+        """WITH RECURSIVE input_lexemes AS (
+               SELECT unnest(
+                   tsvector_to_array(to_tsvector('english'::regconfig, %s))
+               ) AS lexeme
+           ), query_terms AS (
+               SELECT row_number() OVER (ORDER BY lexeme)::integer AS term_number,
+                      plainto_tsquery('english'::regconfig, lexeme) AS term_query
+               FROM input_lexemes
+           ), query_fold(term_number, tsquery) AS (
+               SELECT term_number, term_query
+               FROM query_terms WHERE term_number = 1
+               UNION ALL
+               SELECT query_terms.term_number, query_fold.tsquery || query_terms.term_query
+               FROM query_fold
+               JOIN query_terms
+                 ON query_terms.term_number = query_fold.term_number + 1
+           ), search_query AS (
+               SELECT tsquery FROM query_fold
+               ORDER BY term_number DESC LIMIT 1
            )
            SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunk_text, d.metadata,
                   COALESCE(p.sources, '[]'::jsonb) AS sources,

@@ -15,7 +15,7 @@ def retrieve_keyword(
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run websearch_to_tsquery against indexed chunk text and return ranked hits."""
+    """Run OR-based English FTS against indexed chunk text and return ranked hits."""
     hits = keyword_search_chunks(conn, query, limit=limit, filters=filters)
     for hit in hits:
         hit["score"] = hit["keyword_score"]

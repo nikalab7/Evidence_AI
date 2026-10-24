@@ -28,17 +28,19 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
 - Phase 1D configurable ingestion limit with a hard 1,000-document ceiling,
   read-only database/table/index/vector-size measurement, and live 100-to-1,000
   Supabase capacity verification, cosine latency benchmark, and idempotence check.
-- Phase 2 semantic and PostgreSQL FTS retrievers, a shared local search interface,
-  deterministic Weighted RRF, an evidence-gated retrieval evaluator, and real
-  Supabase retrieval measurements on the 82 dev questions fully represented in
-  the indexed 1,000-document subset.
+- Phase 2 semantic retrieval, OR-based PostgreSQL FTS, a shared local search
+  interface, deterministic Weighted RRF, and an evidence-gated evaluator with
+  per-question output. Real before/after Supabase measurements cover the same
+  82 dev questions fully represented in the indexed 1,000-document subset.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 66 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 71 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- The 1,000-document ingestion and Phase 2 retrieval baseline are verified against
-  Supabase. File-upload parsers, ingestion beyond 1,000, Gemini RAG, citation
+- The 1,000-document ingestion and Phase 2 retrieval are verified against
+  Supabase. OR search raised keyword metrics but lowered equal-weight hybrid
+  metrics on the same 82-question evidence-qualified subset. File-upload parsers,
+  ingestion beyond 1,000, Gemini RAG, citation
   validation, and final answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0

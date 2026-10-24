@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0, Phase 1C/1D, and the Phase 2 retrieval baseline are complete. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The 200-question retrieval-dev set has 82 cases with complete supporting evidence in those chunks; semantic, FTS, and Weighted RRF results are recorded in [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Gemini RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
+Phase 0, Phase 1C/1D, and the Phase 2 retrieval milestone are implemented. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The 200-question retrieval-dev set has 82 cases with complete supporting evidence in those chunks. Keyword retrieval now uses OR-based English FTS; it improved keyword recall, while equal-weight hybrid recall regressed against the prior AND query and semantic-only retrieval. The same-corpus measurements are recorded in [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Gemini RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
 
 ## Project structure
 

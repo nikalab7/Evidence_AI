@@ -11,8 +11,17 @@ schema, API, Gemini, or UI changes were made.
 - Semantic retrieval embeds a natural-language query locally with
   `BAAI/bge-small-en-v1.5`, validates its 384 finite dimensions, then orders
   rows by pgvector cosine distance.
-- Keyword retrieval uses `websearch_to_tsquery('english', ...)`, the existing
-  generated `tsv` column and GIN index, and `ts_rank_cd`.
+- Keyword retrieval uses the existing generated `tsv` column and GIN index,
+  with `ts_rank_cd` ranking.
+- The initial evaluation exposed an overly restrictive keyword query: ordinary
+  adjacent terms passed to `websearch_to_tsquery` use AND semantics. Keyword
+  retrieval now lets PostgreSQL tokenize the bound input with English
+  `to_tsvector`, which stems terms and removes stopwords, then folds the unique
+  normalized lexemes into an OR `tsquery` with PostgreSQL's `tsquery || tsquery`
+  operator. User text is never concatenated into SQL or manually tokenized.
+  Empty/whitespace queries return no hits without a database call; punctuation
+  and stopword-only queries produce no query terms; duplicate terms collapse
+  during `tsvector` normalization.
 - Weighted Reciprocal Rank Fusion is implemented in Python:
 
   `score(chunk) = α / (k + semantic_rank) + β / (k + keyword_rank)`
@@ -44,57 +53,52 @@ Recall@K is the average fraction of gold supporting titles found in the top K;
 MRR is the mean reciprocal rank of the first matching title. These metrics do
 not assess answer correctness, sentence entailment, or factual support.
 
-Evaluation used the same 1,000 indexed documents and 1,000 paragraph chunks for
-all modes. Semantic and keyword channels each returned 20 candidates; metrics
-were computed at K=5 and K=10. Hybrid used α=1, β=1, k=60. The model was loaded
-once locally before the 82-question run.
+Before/after evaluation used the same 82 eligible questions, 1,000 indexed
+documents, candidate K=20, output K=10, and equal-weight RRF α=1, β=1, k=60.
+The before run used `websearch_to_tsquery`; the after run used the OR query.
+Semantic retrieval was unchanged. The keyword query change raised keyword
+recall, while the equal-weight hybrid regressed because the broader keyword
+list contributed more off-target results to RRF.
 
-| Mode | Recall@5 | Recall@10 | MRR |
-| --- | ---: | ---: | ---: |
-| Semantic only | 0.9329 | 0.9756 | 0.9817 |
-| Keyword only | 0.1707 | 0.1829 | 0.2241 |
-| Weighted hybrid | 0.9146 | 0.9756 | 0.9726 |
-
-Weighted hybrid matched semantic Recall@10 but was slightly lower on Recall@5
-and MRR. These equal-weight results do not show that hybrid improves over
-semantic-only retrieval; tuning weights on this dev set remains future work.
+| Mode | Before Recall@5 | After Recall@5 | Before Recall@10 | After Recall@10 | Before MRR | After MRR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Semantic only | 0.9329 | 0.9329 | 0.9756 | 0.9756 | 0.9817 | 0.9817 |
+| Keyword only | 0.1707 | 0.3598 | 0.1829 | 0.5732 | 0.2241 | 0.3232 |
+| Weighted hybrid | 0.9146 | 0.7378 | 0.9756 | 0.9268 | 0.9726 | 0.7418 |
 
 ## Real query latency
 
-The following wall times are from the actual Supabase evaluation run. Semantic
-latency includes local query embedding and its database search. Hybrid includes
-both channels and Python fusion. p95 is nearest-rank over 82 query timings.
+The following medians are from the matching before and after Supabase runs.
+Semantic latency includes local query embedding and its database search.
+Hybrid includes both channels and Python fusion. Each run loaded the model once
+and measured 82 questions. The remote database showed long-tail timing outliers;
+these two runs do not isolate network/service variance from query-cost changes.
 
-| Mode | Minimum | Median | p95 | Maximum |
+| Mode | Before median | After median | After p95 | After maximum |
 | --- | ---: | ---: | ---: | ---: |
-| Semantic | 107.115 ms | 120.784 ms | 215.236 ms | 244.517 ms |
-| Keyword | 87.082 ms | 92.886 ms | 115.532 ms | 479.238 ms |
-| Hybrid | 195.688 ms | 222.572 ms | 315.945 ms | 630.158 ms |
+| Semantic | 131.504 ms | 149.018 ms | 564.692 ms | 1,732.402 ms |
+| Keyword | 105.984 ms | 131.429 ms | 291.315 ms | 1,498.065 ms |
+| Hybrid | 236.530 ms | 286.058 ms | 978.182 ms | 1,844.709 ms |
 
 ## Retrieved examples
 
-### Natural-language smoke query
-
-Query: “Which semi-professional football club was based in Adelaide, South
-Australia?” The real hybrid CLI returned **Enfield City FC** at rank 1, with
-both semantic and keyword rank 1. Its `doc_id` is
-`9592c8d5d46c50920a669c2ed6363b12f923bc6f20c072161e69d807643bc224`, its
-`chunk_id` is
-`8b23113518999fc52bfc40e0547981748249f37b8c15787285ad09e4b4b87838`, and its
-source provenance points to the pinned HotpotQA train record. The CLI reported
-0.972 s retrieval time and 0.218 s model initialization for this one query.
-
 ### Evidence-qualified dev cases
 
-- `5a8f9725554299458435d683`: the gold titles are ESPN College Football Friday
-  Primetime and Dusty Dvoracek. Semantic and hybrid found one title in the top
-  five and both by rank 10 (Recall@5=0.5, Recall@10=1.0, MRR=1.0). Keyword
-  returned no results for this question.
-- `5a73fe9b5542993a88ae2ee2`: the gold titles are Agave and Sisal. The first
-  semantic/hybrid result was Sisal; only one of the two exact gold title aliases
-  appeared by rank 10 (Recall@5=0.5, Recall@10=0.5, MRR=1.0). `Agave
-  decipiens` did not count as the gold alias `Agave` under the explicit exact
-  normalized-title metric.
+- Improved keyword case `5a8dc02d554299441c6ba083`: “What element of Christina
+  Aguilera's ‘Red Hot Kinda Love’ makes it a hip hop track?” Before the OR fix,
+  keyword retrieval returned no hits. Afterward, it returned `Hip hop music`
+  first and the title-level metrics rose from 0.0 to 1.0 at Recall@5, Recall@10,
+  and MRR.
+- Regressed keyword case `5a76446b5542994ccc918748`: “Where is the high school
+  that Gorecki graduated from?” The old AND query returned `Reid Gorecki` at
+  rank 1. The OR query promoted generic high-school pages; no gold title was in
+  its top 10, so all three keyword metrics fell from 0.5/0.5/1.0 to zero.
+- Hybrid improved for `5a8f9725554299458435d683` (the ESPN College Football
+  Friday Primetime question): Recall@5 rose from 0.5 to 1.0; Recall@10 and MRR
+  remained 1.0.
+- Hybrid regressed for the Gorecki question: Recall@5 fell from 1.0 to 0.0,
+  Recall@10 from 1.0 to 1.0, and MRR from 1.0 to 0.1667 (the first matching
+  title moved to rank 6).
 
 ## Limitations
 
@@ -104,8 +108,10 @@ source provenance points to the pinned HotpotQA train record. The CLI reported
 - The 82-question eligible subset is small and biased toward evidence present
   in the first 1,000 documents. The remaining 118 dev questions were excluded
   because their complete evidence is absent from this indexed subset.
-- Hybrid uses equal weights and does not improve on semantic-only results in
-  these aggregate measurements. No final-evaluation set was used for tuning.
+- OR improved keyword recall on this dev subset but increased noise. Equal-
+  weight hybrid lost against the before run and semantic-only retrieval. Weight
+  tuning or a better lexical ranker requires a separate dev-only experiment;
+  no final-evaluation set was used for tuning.
 - Retrieval metrics are source-title metrics; they do not validate exact
   sentence citation, claim entailment, answer correctness, contradictions, or
   abstention.
@@ -122,5 +128,6 @@ cache available:
 .venv\Scripts\python.exe scripts\retrieve.py --mode keyword --query "Which semi-professional football club was based in Adelaide, South Australia?"
 .venv\Scripts\python.exe scripts\retrieve.py --mode hybrid --query "Which semi-professional football club was based in Adelaide, South Australia?" --semantic-weight 1 --keyword-weight 1 --rrf-k 60
 .venv\Scripts\python.exe scripts\evaluate_retrieval.py --top-k 10 --candidate-k 20 --semantic-weight 1 --keyword-weight 1 --rrf-k 60
+.venv\Scripts\python.exe scripts\evaluate_retrieval.py --top-k 10 --candidate-k 20 --semantic-weight 1 --keyword-weight 1 --rrf-k 60 --details-json "$env:TEMP\evidenceai_keyword_details.json"
 .venv\Scripts\python.exe -m pytest -q
 ```
