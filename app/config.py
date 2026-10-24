@@ -9,6 +9,7 @@ from dotenv import dotenv_values
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from time import perf_counter
 from typing import Any, Literal
 
 from app.retrieval.keyword import retrieve_keyword
@@ -14,9 +15,14 @@ RetrievalMode = Literal["semantic", "keyword", "hybrid"]
 DEFAULT_EXCERPT_CHARACTERS = 500
 
 
-def _present_hit(hit: dict[str, Any], rank: int, method: str) -> dict[str, Any]:
+def _present_hit(
+    hit: dict[str, Any], rank: int, method: str, *,
+    include_evidence_text: bool = False,
+    include_validation_source: bool = False,
+) -> dict[str, Any]:
     result = dict(hit)
     text = result.pop("chunk_text", "")
+    validation_source = result.pop("validation_source", None)
     sources = hit.get("sources") or []
     metadata = hit.get("metadata") or {}
     titles = sorted(
@@ -26,7 +32,7 @@ def _present_hit(hit: dict[str, Any], rank: int, method: str) -> dict[str, Any]:
     excerpt = text[:DEFAULT_EXCERPT_CHARACTERS]
     if len(text) > DEFAULT_EXCERPT_CHARACTERS:
         excerpt = excerpt.rstrip() + "…"
-    return {
+    presented = {
         **result,
         "metadata": {
             key: value for key, value in metadata.items()
@@ -39,6 +45,11 @@ def _present_hit(hit: dict[str, Any], rank: int, method: str) -> dict[str, Any]:
         "titles": titles,
         "text_excerpt": excerpt,
     }
+    if include_evidence_text:
+        presented["evidence_text"] = text
+    if include_validation_source and validation_source is not None:
+        presented["validation_source"] = validation_source
+    return presented
 
 
 def search(
@@ -53,6 +64,9 @@ def search(
     semantic_weight: float = 1.0,
     keyword_weight: float = 1.0,
     rrf_k: int = 60,
+    timings: dict[str, float] | None = None,
+    include_evidence_text: bool = False,
+    include_validation_source: bool = False,
 ) -> list[dict[str, Any]]:
     """Retrieve stable, provenance-aware chunk results with one ranked API."""
     if mode not in ("semantic", "keyword", "hybrid"):
@@ -73,22 +87,42 @@ def search(
             keyword_weight=keyword_weight, rrf_k=rrf_k,
         )
 
+    retrieval_started = perf_counter()
     if mode == "semantic":
         if model is None:
             raise ValueError("semantic retrieval requires an embedding model")
-        hits = retrieve_semantic(conn, model, query, limit=limit, filters=filters)
-        return [_present_hit(hit, rank, mode) for rank, hit in enumerate(hits, start=1)]
+        hits = retrieve_semantic(
+            conn, model, query, limit=limit, filters=filters, timings=timings,
+            include_validation_source=include_validation_source,
+        )
+        if timings is not None:
+            timings["retrieval_processing_seconds"] = perf_counter() - retrieval_started
+        return [_present_hit(hit, rank, mode, include_evidence_text=include_evidence_text,
+                             include_validation_source=include_validation_source)
+                for rank, hit in enumerate(hits, start=1)]
 
     if mode == "keyword":
-        hits = retrieve_keyword(conn, query, limit=limit, filters=filters)
-        return [_present_hit(hit, rank, mode) for rank, hit in enumerate(hits, start=1)]
+        hits = retrieve_keyword(
+            conn, query, limit=limit, filters=filters, timings=timings,
+            include_validation_source=include_validation_source,
+        )
+        if timings is not None:
+            timings["retrieval_processing_seconds"] = perf_counter() - retrieval_started
+        return [_present_hit(hit, rank, mode, include_evidence_text=include_evidence_text,
+                             include_validation_source=include_validation_source)
+                for rank, hit in enumerate(hits, start=1)]
 
     if model is None:
         raise ValueError("hybrid retrieval requires an embedding model")
     semantic_hits = retrieve_semantic(
-        conn, model, query, limit=candidate_limit, filters=filters,
+        conn, model, query, limit=candidate_limit, filters=filters, timings=timings,
+        include_validation_source=include_validation_source,
     )
-    keyword_hits = retrieve_keyword(conn, query, limit=candidate_limit, filters=filters)
+    keyword_hits = retrieve_keyword(
+        conn, query, limit=candidate_limit, filters=filters, timings=timings,
+        include_validation_source=include_validation_source,
+    )
+    fusion_started = perf_counter()
     hits = weighted_rrf(
         semantic_hits,
         keyword_hits,
@@ -96,4 +130,9 @@ def search(
         keyword_weight=keyword_weight,
         rrf_k=rrf_k,
     )
-    return [_present_hit(hit, rank, "hybrid") for rank, hit in enumerate(hits[:limit], start=1)]
+    if timings is not None:
+        timings["fusion_seconds"] = perf_counter() - fusion_started
+        timings["retrieval_processing_seconds"] = perf_counter() - retrieval_started
+    return [_present_hit(hit, rank, "hybrid", include_evidence_text=include_evidence_text,
+                         include_validation_source=include_validation_source)
+            for rank, hit in enumerate(hits[:limit], start=1)]

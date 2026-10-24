@@ -74,9 +74,8 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No ingestion beyond 1,000 documents, Gemini RAG, citation validation, agentic
-  loop, or answer-quality metrics are implemented or claimed. Phase 2 retrieval
-  metrics are title-level only; they do not measure answer correctness or entailment.
+- No ingestion beyond 1,000 documents was performed. Phase 2 retrieval metrics
+  remain title-level only; they do not measure answer correctness or entailment.
 - The ingestion report records the actual first-run database size change and a
   later size increase observed across a zero-insert rerun; the cause of that
   increase was not established. See reports/ingestion_100.md.
@@ -86,3 +85,20 @@ Local planning and personal preparation notes are excluded from the repository.
 - Completed the requested Phase 0 repository tree with project-only root
   instructions and sanitized public requirements/roadmap summaries. Original
   assessment and personal preparation notes remain Git-ignored locally.
+
+## Phase 3 addition — 2026-10-24
+
+- Codex assistance was used to implement the bounded Gemini investigation CLI,
+  typed request/response structures, read-only search/document tools, latency
+  traces, and two-level citation validation. The repository owner directed the
+  scope and should review and be able to explain each component independently.
+- Tests cover evidence offset reconstruction, exact quote checks, unsupported
+  citation rejection, abstention, tool/request limits, retries, and a
+  fixture-only contradiction case. No synthetic conflicting documents were
+  inserted into the database.
+- Actual local checks used the configured `gemini-3.5-flash-lite` model and the
+  fail-closed Evidence_AI Supabase project. One real investigation abstained and
+  one returned an answer with one validated citation. Exact request/token and
+  timing details are in `reports/phase3_investigation.md`.
+- The deployed Render region, environment, and build settings were not
+  accessible and are still unverified. No Render deployment was triggered.

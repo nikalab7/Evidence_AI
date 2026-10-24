@@ -1,0 +1,40 @@
+{
+  "retrieved": [
+    {
+      "chunk_id": "chunk-outage",
+      "doc_id": "doc-report-a",
+      "title": "Operations Report A",
+      "titles": ["Operations Report A"],
+      "sources": [{"source_id": "source-a", "title_alias": "Operations Report A"}],
+      "full_text": "At 14:00 UTC, payment processing was unavailable.",
+      "start_char": 0,
+      "end_char": 49
+    },
+    {
+      "chunk_id": "chunk-healthy",
+      "doc_id": "doc-report-b",
+      "title": "Operations Report B",
+      "titles": ["Operations Report B"],
+      "sources": [{"source_id": "source-b", "title_alias": "Operations Report B"}],
+      "full_text": "At 14:00 UTC, payment processing remained available.",
+      "start_char": 0,
+      "end_char": 52
+    }
+  ],
+  "draft": {
+    "central_claim_id": "claim-outage",
+    "claims": [
+      {
+        "claim_id": "claim-outage",
+        "text": "One report says payment processing was unavailable at 14:00 UTC.",
+        "citations": [{"chunk_id": "chunk-outage", "quote": "At 14:00 UTC, payment processing was unavailable."}]
+      },
+      {
+        "claim_id": "claim-healthy",
+        "text": "Another report says payment processing remained available at 14:00 UTC.",
+        "citations": [{"chunk_id": "chunk-healthy", "quote": "At 14:00 UTC, payment processing remained available."}]
+      }
+    ],
+    "conflict_groups": [["claim-outage", "claim-healthy"]]
+  }
+}

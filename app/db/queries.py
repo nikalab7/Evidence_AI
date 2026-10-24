@@ -446,6 +446,9 @@ def _search_result_rows(rows: Sequence[tuple[Any, ...]], score_name: str) -> lis
         "metadata": row[4],
         "sources": row[5] or [],
         score_name: float(row[6]),
+        **({"validation_source": {
+            "full_text": row[7], "start_char": row[8], "end_char": row[9],
+        }} if len(row) > 7 else {}),
     } for row in rows]
 
 
@@ -455,6 +458,7 @@ def semantic_search_chunks(
     *,
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
+    include_validation_source: bool = False,
 ) -> list[dict[str, Any]]:
     """Run pgvector cosine retrieval and include paragraph titles and provenance."""
     if len(vector) != 384 or not all(math.isfinite(float(value)) for value in vector):
@@ -462,6 +466,7 @@ def semantic_search_chunks(
     if not 1 <= limit <= 100:
         raise ValueError("retrieval limit must be between 1 and 100")
     filter_sql, filter_values = _retrieval_filter_sql(filters)
+    validation_fields = sql.SQL(", d.full_text, c.start_char, c.end_char") if include_validation_source else sql.SQL("")
     literal = "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
     statement = sql.SQL(
         """WITH query_vector AS (
@@ -470,7 +475,7 @@ def semantic_search_chunks(
            SELECT c.chunk_id, c.doc_id, c.chunk_position,
                   substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char), d.metadata,
                   COALESCE(p.sources, '[]'::jsonb) AS sources,
-                  c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance
+                  c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance{}
            FROM public.chunks c
            JOIN public.documents d ON d.doc_id = c.doc_id
            CROSS JOIN query_vector q
@@ -487,7 +492,7 @@ def semantic_search_chunks(
            WHERE {}
            ORDER BY c.embedding OPERATOR(extensions.<=>) q.embedding, c.chunk_id
            LIMIT %s"""
-    ).format(filter_sql)
+    ).format(validation_fields, filter_sql)
     rows = conn.execute(statement, (literal, *filter_values, limit)).fetchall()
     return _search_result_rows(rows, "cosine_distance")
 
@@ -498,6 +503,7 @@ def keyword_search_chunks(
     *,
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
+    include_validation_source: bool = False,
 ) -> list[dict[str, Any]]:
     """Run English FTS with an OR of PostgreSQL-normalized query lexemes."""
     if not isinstance(query, str):
@@ -507,6 +513,7 @@ def keyword_search_chunks(
     if not query.strip():
         return []
     filter_sql, filter_values = _retrieval_filter_sql(filters)
+    validation_fields = sql.SQL(", d.full_text, c.start_char, c.end_char") if include_validation_source else sql.SQL("")
     statement = sql.SQL(
         """WITH RECURSIVE input_lexemes AS (
                SELECT unnest(
@@ -531,7 +538,7 @@ def keyword_search_chunks(
            SELECT c.chunk_id, c.doc_id, c.chunk_position,
                   substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char), d.metadata,
                   COALESCE(p.sources, '[]'::jsonb) AS sources,
-                  ts_rank_cd(c.tsv, q.tsquery) AS keyword_score
+                  ts_rank_cd(c.tsv, q.tsquery) AS keyword_score{}
            FROM public.chunks c
            JOIN public.documents d ON d.doc_id = c.doc_id
            CROSS JOIN search_query q
@@ -548,9 +555,31 @@ def keyword_search_chunks(
            WHERE c.tsv @@ q.tsquery AND {}
            ORDER BY keyword_score DESC, c.chunk_id
            LIMIT %s"""
-    ).format(filter_sql)
+    ).format(validation_fields, filter_sql)
     rows = conn.execute(statement, (query, *filter_values, limit)).fetchall()
     return _search_result_rows(rows, "keyword_score")
+
+
+def read_document_context(conn: Connection, doc_id: str) -> dict[str, Any] | None:
+    """Read one canonical document and all its provenance without changing data."""
+    row = conn.execute(
+        """SELECT d.doc_id, d.full_text, d.metadata,
+                  COALESCE(jsonb_agg(jsonb_build_object(
+                      'source_id', s.source_id, 'title_alias', s.title_alias,
+                      'title_normalized', s.title_normalized, 'source_url', s.source_url,
+                      'source_revision', s.source_revision, 'source_split', s.source_split,
+                      'sentences', s.sentences
+                  ) ORDER BY s.title_normalized, s.source_id)
+                    FILTER (WHERE s.source_id IS NOT NULL), '[]'::jsonb) AS sources
+           FROM public.documents d
+           LEFT JOIN public.document_sources s ON s.doc_id = d.doc_id
+           WHERE d.doc_id = %s
+           GROUP BY d.doc_id""",
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {"doc_id": row[0], "full_text": row[1], "metadata": row[2], "sources": row[3] or []}
 
 
 def cosine_search(conn: Connection, vector: Sequence[float], limit: int = 5) -> list[dict[str, Any]]:

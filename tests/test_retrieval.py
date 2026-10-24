@@ -169,6 +169,41 @@ def test_semantic_sql_uses_halfvec_and_reconstructs_chunk_text_from_offsets():
     assert conn.params[1] == 5
 
 
+def test_citation_search_includes_canonical_text_and_offsets_only_when_requested():
+    class Result:
+        def fetchall(self):
+            return [("chunk", "doc", 0, "A fact.", {}, [], 0.1, "Prefix A fact. Suffix", 7, 14)]
+
+    class Connection:
+        def execute(self, statement, params):
+            self.statement = str(statement)
+            return Result()
+
+    conn = Connection()
+    result = semantic_search_chunks(conn, [0.0] * 384, include_validation_source=True)
+    assert "d.full_text, c.start_char, c.end_char" in conn.statement
+    assert result[0]["validation_source"] == {
+        "full_text": "Prefix A fact. Suffix", "start_char": 7, "end_char": 14,
+    }
+
+
+def test_read_document_context_binds_document_id_and_preserves_provenance():
+    from app.db.queries import read_document_context
+
+    class Connection:
+        def execute(self, statement, params):
+            self.statement, self.params = str(statement), params
+            return self
+        def fetchone(self):
+            return ("doc-id", "full text", {"kind": "hotpot"}, [{"source_id": "source-id"}])
+
+    conn = Connection()
+    result = read_document_context(conn, "doc-id")
+    assert conn.params == ("doc-id",)
+    assert "DROP TABLE" not in conn.statement
+    assert result["sources"][0]["source_id"] == "source-id"
+
+
 def test_engine_returns_source_titles_excerpts_and_ranked_scores(monkeypatch):
     import app.retrieval.engine as engine
 

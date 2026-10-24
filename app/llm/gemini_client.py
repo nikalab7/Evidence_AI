@@ -1,1 +1,103 @@
-"""Production Gemini client; app.service_probe is diagnostics only."""
+"""Minimal REST Gemini client with bounded, measurable request retries."""
+
+from __future__ import annotations
+
+import re
+import time
+from typing import Any, Mapping, Sequence
+
+import httpx
+
+from app.config import DEFAULT_GEMINI_MODEL, Settings
+from app.llm.gemini_protocol import API_BASE, parse_response, request_body, request_metric, usage_counts
+from app.llm.schemas import LLMResponse
+
+
+_MODEL_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class GeminiAPIError(RuntimeError):
+    """Sanitized upstream failure with request timing for budget accounting."""
+
+    def __init__(self, reason: str, metrics: list[dict[str, Any]], status: int | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.request_metrics = metrics
+        self.status = status
+
+
+class GeminiClient:
+    def __init__(
+        self, settings: Settings, *, client: httpx.Client | None = None,
+        timeout_seconds: float = 25.0, max_retries: int = 1,
+    ):
+        self.settings = settings
+        self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+        self._owns_client = client is None
+        self.client = client or httpx.Client(timeout=timeout_seconds, follow_redirects=False)
+
+    def close(self) -> None:
+        if self._owns_client:
+            self.client.close()
+
+    def __enter__(self) -> "GeminiClient":
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        self.close()
+
+    def generate(
+        self, messages: Sequence[Mapping[str, Any]], *,
+        tools: list[dict[str, Any]] | None = None,
+        schema: dict[str, Any] | None = None,
+        request_budget: int = 1,
+    ) -> LLMResponse:
+        """Generate content; each HTTP attempt consumes one investigation call."""
+        if not self.settings.gemini_api_key:
+            raise GeminiAPIError("missing_api_key", [])
+        if not 1 <= request_budget <= 5:
+            raise ValueError("request_budget must be between one and five")
+        model = (self.settings.gemini_model or DEFAULT_GEMINI_MODEL).removeprefix("models/")
+        if not _MODEL_RE.fullmatch(model):
+            raise GeminiAPIError("invalid_model_name", [])
+        body = request_body(messages, tools, schema)
+        metrics: list[dict[str, Any]] = []
+        max_attempts = min(self.max_retries + 1, request_budget)
+        for attempt in range(1, max_attempts + 1):
+            started = time.perf_counter()
+            status = None
+            try:
+                response = self.client.post(
+                    f"{API_BASE}/models/{model}:generateContent",
+                    headers={"x-goog-api-key": self.settings.gemini_api_key}, json=body,
+                )
+                status = response.status_code
+                response.raise_for_status()
+                payload = response.json()
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                retryable = status == 429 or status >= 500
+                reason = "upstream_http_error"
+            except httpx.TimeoutException:
+                retryable, reason = True, "upstream_timeout"
+            except httpx.RequestError:
+                retryable, reason = True, "upstream_network_error"
+            except (ValueError, TypeError):
+                retryable, reason = False, "invalid_upstream_response"
+            else:
+                elapsed = time.perf_counter() - started
+                usage = usage_counts(payload.get("usageMetadata", {}) if isinstance(payload, Mapping) else {})
+                metric = request_metric(attempt, elapsed, status, usage)
+                try:
+                    generated = parse_response(payload, [*metrics, metric], usage)
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    metrics.append(metric)
+                    raise GeminiAPIError("invalid_upstream_response", metrics, status) from None
+                metrics.append(metric)
+                return generated
+            metrics.append(request_metric(attempt, time.perf_counter() - started, status, {}))
+            if not retryable or attempt == max_attempts:
+                raise GeminiAPIError(reason, metrics, status) from None
+            time.sleep(min(0.1 * (2 ** (attempt - 1)), 0.3))
+        raise GeminiAPIError("request_budget_exhausted", metrics)

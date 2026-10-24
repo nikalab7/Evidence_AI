@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from time import perf_counter
 from typing import Any
 
 from app.db.queries import keyword_search_chunks
@@ -14,9 +15,17 @@ def retrieve_keyword(
     *,
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
+    timings: dict[str, float] | None = None,
+    include_validation_source: bool = False,
 ) -> list[dict[str, Any]]:
     """Run OR-based English FTS against indexed chunk text and return ranked hits."""
-    hits = keyword_search_chunks(conn, query, limit=limit, filters=filters)
+    started = perf_counter()
+    hits = keyword_search_chunks(
+        conn, query, limit=limit, filters=filters,
+        include_validation_source=include_validation_source,
+    )
+    if timings is not None:
+        timings["keyword_sql_seconds"] = perf_counter() - started
     for hit in hits:
         hit["score"] = hit["keyword_score"]
         hit["channel"] = "keyword"
