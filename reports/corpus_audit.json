@@ -1,0 +1,122 @@
+{
+  "candidate_pool_notice": "40 candidates only; choose up to 25 multi-hop later and add separate 5 single-hop, 8 unanswerable, and 7 conflicting cases.",
+  "corpus": {
+    "duplicates_skipped_by_hash": 18,
+    "duplicates_skipped_by_title": 4357,
+    "empty_paragraphs_skipped": 0,
+    "estimated_tokens_chars_div_4": {
+      "average": 132.57,
+      "median": 118.0
+    },
+    "paragraph_length_chars": {
+      "average": 528.78,
+      "median": 470.0
+    },
+    "paragraph_occurrences": 54375,
+    "title_collision_count": 1,
+    "title_collision_examples": [
+      {
+        "content_hashes_sample": [
+          "5cc56c97e5c26445285f5f7f3914d751a5c088388dea1843fc7286a5f7ad535a",
+          "78af1fc1c3fdb94f59de68188421b6ce10ab66c8c62d5ab00889380c52338ca7"
+        ],
+        "title": "Cover version",
+        "version_count": 2
+      }
+    ],
+    "unique_content_documents": 50000
+  },
+  "corpus_fill_questions_scanned": 90447,
+  "corpus_fill_questions_used": 5227,
+  "corpus_jsonl_sha256": "3dd75ba39fd8fe6842bf5cbc186da8457c7f3d90cba6cc6e98b44e63df7de0b6",
+  "corpus_target": 50000,
+  "dataset": "hotpotqa/hotpot_qa",
+  "dataset_config": "distractor",
+  "dataset_revision": "1908d6afbbead072334abe2965f91bd2709910ab",
+  "datasets_library_version": "4.8.4",
+  "document_identity": "SHA-256 of normalized paragraph text; title is source metadata",
+  "eval_candidate_count": 40,
+  "eval_candidates_jsonl_sha256": "f7b1b12bb968c4710ffae5af27596de2d0ffa72b75a4759043bc49947341a4c0",
+  "evidence_coverage": {
+    "combined": {
+      "questions_with_invalid_support": 0,
+      "supporting_sentence_coverage_percent": 100.0,
+      "supporting_sentence_references": 578,
+      "supporting_sentences_found": 578,
+      "supporting_title_coverage_percent": 100.0,
+      "supporting_title_references": 578,
+      "supporting_titles_found": 578
+    },
+    "eval_candidates": {
+      "questions_with_invalid_support": 0,
+      "supporting_sentence_coverage_percent": 100.0,
+      "supporting_sentence_references": 92,
+      "supporting_sentences_found": 92,
+      "supporting_title_coverage_percent": 100.0,
+      "supporting_title_references": 92,
+      "supporting_titles_found": 92
+    },
+    "retrieval_dev": {
+      "questions_with_invalid_support": 0,
+      "supporting_sentence_coverage_percent": 100.0,
+      "supporting_sentence_references": 486,
+      "supporting_sentences_found": 486,
+      "supporting_title_coverage_percent": 100.0,
+      "supporting_title_references": 486,
+      "supporting_titles_found": 486
+    }
+  },
+  "large_outputs_deferred": true,
+  "license": "CC BY-SA 4.0",
+  "normalization": "Unicode NFKC, casefold, collapsed whitespace",
+  "outputs": {
+    "corpus_written": false,
+    "eval_candidates_written": true,
+    "retrieval_dev_written": false
+  },
+  "question_sets_disjoint": true,
+  "retrieval_dev_count": 200,
+  "retrieval_dev_jsonl_sha256": "5401930220fca759ba637cc005d24c294330f177bf5eac7e525eac650c97eaec",
+  "sampling_seed": 42,
+  "selected_context_paragraphs": 2400,
+  "selected_question_ids": {
+    "eval_candidates_csv": "5a7302895542992359bc31fc,5a7a892a55429941d65f268d,5ab3026c55429976abd1bc1c,5ab6d9295542995eadef00c4,5ab280b95542997061209642,5ab8efc75542991b5579f05f,5ab278cb554299449642c8b5,5a8109535542995ce29dcba2,5ab2fc3355429976abd1bbf0,5ae109f755429920d523429e,5ab2b784554299545a2cfa1f,5a7ebff35542994959419a6e,5a8e738a5542995085b3742f,5ae062d95542993d6555eb36,5a9095bf55429933b8a20572,5a87b9955542996e4f3088ef,5adee1515542992d7e9f9263,5adcc27c5542994ed6169bf1,5a79d0945542994f819ef0b9,5a8a846a5542996c9b8d5f18,5ab9faac55429901930fa75d,5a7fab595542994857a767b1,5adeb64555429939a52fe96a,5a8caeb15542996e8ac88b1f,5abe82ba5542993f32c2a13d,5ade54a4554299728e26c6d0,5ac450345542995c82c4ad2b,5a8884f25542997e5c09a5ec,5adca7e95542990d50227cd3,5a7163b55542994082a3e80b,5ab9703c55429970cfb8eaee,5a73253a5542991f29ee2d0b,5a85a4d75542994c784ddb2f,5a8d54b055429941ae14dfa7,5add37485542992c1e3a256a,5ac143335542991316484aab,5a74dfad55429974ef308c84,5a8a567c554299515336136d,5ae18f005542997283cd222c,5a89278a55429938390d4042",
+    "retrieval_dev_csv": "5ae7aadd5542993210983ee5,5ae13bf8554299422ee99635,5ae232c6554299492dc91bdc,5ade01ad5542997dc790711b,5ab69cf85542995eadef0038,5a88ee41554299206df2b3b9,5ac0887f554299012d1db5fc,5ab6d07b5542995eadef00a4,5abe98f65542993f32c2a17b,5a830af155429966c78a6b0a,5ac05f1a5542992a796ded01,5ac487fa5542995c82c4ad59,5a8ca88e5542996e8ac88b09,5ae6936e5542991bbc97613c,5ab6210255429953192ad262,5ab3add05542992ade7c6e1e,5ae01e4b554299603e4183eb,5ac2181c5542991316484be4,5a74752655429929fddd8434,5adecf285542995ec70e8f23,5a866c7655429960ec39b69c,5ab31ec055429976abd1bc64,5ab3a512554299233954ff71,5adcdcd655429947343537b4,5ab769a35542995dae37e917,5a713cb55542994082a3e6ca,5a7f9fb255429969796c1af4,5ae5d68d55429929b08079cc,5a8dc02d554299441c6ba083,5ae5d02855429929b08079b2,5a77a94e5542997042120ac7,5ae64d835542992ae0d162c3,5ac4ffa05542996feb3fe9bf,5a76c5e85542994aec3b7173,5ab3d81b55429969a97a81ce,5ae8038d5542993210984037,5a7d1fe855429909bec7696c,5a8f078f5542995b44241f30,5a8cdd0a55429941ae14df25,5a7c9fda55429935c91b526a,5ae741045542997b22f6a63d,5a729fc65542994cef4bc398,5a865dbc55429960ec39b678,5a7e4b0d554299495941998d,5a73fe9b5542993a88ae2ee2,5ab2e2865542991669774122,5a76446b5542994ccc918748,5ac4d5f05542997ea680cac9,5adbdcf75542996e68525264,5abb7dff5542996cc5e4a009,5abaeebc5542996606241697,5ae332ab55429928c4239678,5a8b916255429949d91db5e4,5a77f31055429949eeb29fbc,5abb2ea5554299232ef4a3d6,5abcf02b55429959677d6b55,5a83c0a1554299123d8c21a4,5a80aa4c5542996402f6a5da,5a70feae5542994082a3e499,5adc8c7c5542994d58a2f650,5a883c875542997e5c09a5af,5ab87cd85542992aa3b8c8ee,5add1bdc5542994ed6169c91,5a78eb0155429974737f78ff,5ab972805542996be20204f7,5ab551ea554299494045ef7d,5ae161985542990adbacf77c,5abf2a165542990832d3a135,5a87284855429960ec39b75b,5ac12de55542994d76dccda1,5a887797554299206df2b295,5a8ac07855429930ff3c0e0f,5a74c65755429974ef308c5b,5ae625335542995703ce8b28,5abbef0a554299114383a0a3,5a8b149b55429949d91db4a8,5ae2e35355429928c4239531,5ac4d8c7554299076e296e12,5ae152d255429901ffe4ae5e,5ae13bf055429920d5234335,5a8d142a554299653c1aa138,5ae3f1165542995ad6573cb6,5abc692f554299114383a120,5a7e247b5542995ed0d166aa,5a78b134554299148911f933,5ae306905542991a06ce991f,5a8a04fc5542992e4fca84da,5a8cb935554299585d9e372f,5a902c965542990a984935a1,5a8f9725554299458435d683,5ae2065b554299234fd043ad,5ae32af65542992f92d82236,5ae1403255429920d5234347,5a78d617554299148911f982,5ae1e2c25542997283cd22be,5a7a5aad5542996c55b2dd6c,5ac016515542992a796dec7d,5ae1658b5542997b2ef7d1d0,5a70f2b25542994082a3e41f,5a7c31a25542996dd594b8be,5a77db035542995d8318130e,5ac4efd55542995c82c4ad7f,5ac53e195542994611c8b465,5adc38da554299438c868d7c,5a754e5b55429916b01642f0,5ac3be0e554299204fd21e25,5ade2ffb55429939a52fe856,5ae20ed35542997283cd2391,5ae13eb05542997b2ef7d160,5ab9dc9255429901930fa736,5a809a205542996402f6a591,5ab3acd15542992ade7c6e17,5addef245542997dc79070c5,5adeaa5b55429939a52fe93a,5a7726b055429937353601f1,5ab5b5c75542997d4ad1f1b7,5a74b43855429974ef308c37,5a72a44e5542994cef4bc3ae,5abecbe55542994516f45439,5a8461e85542992ef85e23d5,5a7eb9b95542994959419a6a,5adf1d5d5542993344016bdd,5a828ee855429966c78a6a58,5a7f5ec355429969796c1a16,5a72754e5542997f827839e3,5a83103655429966c78a6b1d,5a7e102a5542997cc2c47515,5adeb6b355429939a52fe96b,5adf9207554299025d62a2c4,5ae0e30155429924de1b71cc,5a8b53e755429950cd6afcab,5a8c9ba05542996e8ac88aec,5abff8c25542997d6429597b,5ac560075542993e66e82393,5ac302fd5542996773102692,5ac0db0b5542992a796ded9d,5ae51b135542993aec5ec145,5a761d3955429976ec32bd14,5ab94ea8554299743d22eaf1,5ae4f10055429960a22e0216,5abc3e4e55429959677d6a5f,5adf9b825542992d7e9f93b6,5ab7273b5542993667793f55,5a8b76575542997f31a41d39,5ae13a3c5542990adbacf72f,5abbdc19554299642a094b64,5ab23b14554299722f9b4ccb,5ab4443655429942dd415f05,5adbdc4c5542996e68525262,5a7af62155429931da12c9af,5ac098f0554299294b219015,5adcce135542990d50227d2f,5a8b846c55429971feec472f,5a8e7ac55542990e94052b20,5a831b1b55429940e5e1a962,5ab8bf295542991b5579eff2,5abb0c375542992ccd8e7ed9,5a72232155429971e9dc92c8,5ab3fbbd5542992ade7c6f18,5a8451b355429933447460d6,5ac0a0db5542992a796ded40,5a75b20b5542992db94736a6,5a7a7a685542990783324f5d,5ae4ace95542995dadf243a2,5adde8db5542992200553b99,5a7b19fc5542992d025e676f,5a7b87385542995eb53be94d,5a83b23e5542993344746075,5a81475b55429938b6142321,5ab7fab95542993667794082,5ae17f3b55429901ffe4aeba,5a810954554299260e20a215,5a90b8fa55429933b8a205be,5a7daec95542991319bc93ed,5a8726c05542991e771816f3,5ae329de5542992f92d8222f,5ab5f9f0554299110f2199a6,5a7165845542994082a3e811,5ade3f7c554299728e26c68f,5a88355e5542994846c1ce28,5ae1b578554299492dc91b78,5a7dbfd95542990b8f503a6e,5ab7b7cc55429928e1fe389d,5a8ee8d75542990e94052bb3,5ae405565542995dadf242de,5a8af66f55429949d91db432,5adbfa6b5542996e68525290,5a8911fe554299669944a49c,5adf89695542993344016cdc,5abec0045542994516f4541a,5a85fa215542994775f606d7,5ae408b555429970de88d88f,5ab2bd58554299545a2cfa47,5addda745542992200553b59,5ab65f8855429954757d3266,5a870c7355429960ec39b70d,5ac243d355429951e9e6850b,5ae4910d5542995ad6573da2,5abdc95a55429965af743e42,5a7b4ee95542992d025e67ee"
+  },
+  "selection": {
+    "eligible_question_counts_by_stratum": {
+      "bridge/easy": 14381,
+      "bridge/hard": 12412,
+      "bridge/medium": 45950,
+      "comparison/easy": 3324,
+      "comparison/hard": 3135,
+      "comparison/medium": 10385
+    },
+    "excluded_question_reasons": {
+      "incomplete_question_or_support": 22,
+      "invalid_context_paragraph_count": 838
+    },
+    "rows_scanned": 90447,
+    "selected_candidate_counts_by_stratum": {
+      "bridge/easy": 7,
+      "bridge/hard": 6,
+      "bridge/medium": 7,
+      "comparison/easy": 7,
+      "comparison/hard": 6,
+      "comparison/medium": 7
+    },
+    "selected_dev_counts_by_stratum": {
+      "bridge/easy": 34,
+      "bridge/hard": 33,
+      "bridge/medium": 33,
+      "comparison/easy": 34,
+      "comparison/hard": 33,
+      "comparison/medium": 33
+    },
+    "unique_question_ids_seen": 90447
+  },
+  "selection_algorithm": "lowest SHA-256(seed + NUL + question_id) score within each type/level stratum",
+  "source_split": "train",
+  "source_url": "https://huggingface.co/datasets/hotpotqa/hotpot_qa",
+  "status": "passed"
+}

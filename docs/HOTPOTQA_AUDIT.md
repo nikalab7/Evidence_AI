@@ -74,7 +74,11 @@ questions (57.36%). The train+validation union contains the validation source
 contexts, so its 99.994% evidence presence is a source-availability check, not
 a retrieval-quality result.
 
-No final corpus subset has been selected or ingested.
+The new content-hash corpus selection and evidence audit are recorded separately
+in [`reports/corpus_audit.json`](../reports/corpus_audit.json). That local-only
+run reached 50,000 unique paragraph texts and 100% selected support coverage.
+Its large JSONL outputs have not been materialized yet, and no records have
+been inserted into Supabase.
 
 The validation split contains 5,918 bridge and 1,487 comparison questions, all
 marked `hard` in this dataset revision. It does not supply absent-answer or
@@ -82,5 +86,5 @@ conflicting cases, and it does not cover a simple-question category. Those
 cases must be added to the separate evaluation set before evaluation is
 considered complete.
 
-Full ingestion remains blocked until we select a reproducible corpus/evaluation
-subset and measure Supabase storage at staged loads.
+Full-scale ingestion remains gated on reviewing the selected outputs and
+measuring Supabase storage at staged loads.

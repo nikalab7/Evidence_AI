@@ -19,12 +19,16 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   counts, supporting-sentence coverage checks, unit tests, and aggregate documentation.
 - Build-time FastEmbed model cache download, runtime manifest checks, and a
   readiness gate computed from the recorded Render measurements.
+- Fixed-seed HotpotQA train selection, content-hash deduplication, source-title
+  collision preservation, and title-plus-sentence coverage tests.
 
 ## Validation and limitations
 
-- Latest focused validation: isolated `.venv`, Phase 0 smoke/cache/preflight tests - 20 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 46 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- The additional modules are explicitly placeholders; no future feature is claimed implemented.
+- API, database, retrieval, LLM, reasoning, and evaluation modules remain placeholders
+  where their implementation milestones have not started; local corpus preparation
+  does not claim database ingestion or RAG behavior.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0
   was enabled and a cosine smoke query passed. Baseline database size: 20,491,411
@@ -34,13 +38,18 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   RSS. Local build-time cache and two local restart checks passed; a post-change
   Render deployment/restart check remains pending. Details are in
   reports/render_preflight.md.
+- The local corpus audit selected 200 retrieval questions and 40 separate
+  candidates with seed 42, produced 50,000 unique content hashes, and verified
+  578/578 selected supporting title/sentence references. The large corpus and
+  200-line retrieval file are deferred; the 40-line candidate file and report
+  were written. See reports/corpus_audit.json.
 - A complete streaming scan of HotpotQA `distractor` revision
   `1908d6afbbead072334abe2965f91bd2709910ab` counted 482,021 unique train
   records and 507,494 unique records across train+validation contexts. Validation
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No dataset ingestion, retrieval, ranking, citation validation, agentic loop, or
+- No database ingestion, retrieval, ranking, citation validation, agentic loop, or
   evaluation-quality metrics are implemented or claimed.
 - Independent non-AI implementation contributions are not recorded at this stage.
 
