@@ -1,4 +1,4 @@
-"""Compare exact vector and halfvec-cast retrieval without changing the schema."""
+"""Compare exhaustive halfvec search with the built HNSW index."""
 
 from __future__ import annotations
 
@@ -29,14 +29,10 @@ from app.model_cache import load_model
 DEV_PATH = PROJECT_ROOT / "eval" / "retrieval_dev.jsonl"
 LIMIT = 10
 
-EXACT_DISTANCE = "c.embedding OPERATOR(extensions.<=>) q.embedding"
-HALFVEC_DISTANCE = (
-    "c.embedding::extensions.halfvec(384) "
-    "OPERATOR(extensions.<=>) q.embedding::extensions.halfvec(384)"
-)
+HALFVEC_DISTANCE = "c.embedding OPERATOR(extensions.<=>) q.embedding"
 
 RANK_SQL = """WITH query_vector AS (
-        SELECT %s::extensions.vector(384) AS embedding
+        SELECT %s::extensions.halfvec(384) AS embedding
     )
     SELECT c.chunk_id, c.doc_id, {distance} AS cosine_distance,
            COALESCE(p.sources, '[]'::jsonb) AS sources
@@ -75,9 +71,11 @@ def _vector_literal(vector: Any) -> str:
     return "[" + ",".join(format(value, ".9g") for value in values) + "]"
 
 
-def _rank(conn: Any, vector: Any, *, halfvec: bool) -> tuple[list[dict[str, Any]], float]:
-    distance = HALFVEC_DISTANCE if halfvec else EXACT_DISTANCE
-    statement = RANK_SQL.format(distance=distance)
+def _rank(conn: Any, vector: Any, *, hnsw: bool) -> tuple[list[dict[str, Any]], float]:
+    conn.execute("SET LOCAL enable_bitmapscan = off")
+    conn.execute(f"SET LOCAL enable_indexscan = {'on' if hnsw else 'off'}")
+    conn.execute(f"SET LOCAL enable_seqscan = {'off' if hnsw else 'on'}")
+    statement = RANK_SQL.format(distance=HALFVEC_DISTANCE)
     started = time.perf_counter()
     rows = conn.execute(statement, (_vector_literal(vector), LIMIT)).fetchall()
     elapsed = time.perf_counter() - started
@@ -102,7 +100,6 @@ def run(path: Path = DEV_PATH) -> dict[str, Any]:
     with connect_database() as conn:
         conn.execute("SET TRANSACTION READ ONLY")
         conn.execute("SET LOCAL statement_timeout = '60000'")
-        conn.execute("SET LOCAL enable_indexscan = off")
         conn.execute("SET LOCAL enable_bitmapscan = off")
         evidence = read_indexed_source_evidence(conn)
         eligible, excluded = select_eligible_questions(
@@ -112,44 +109,55 @@ def run(path: Path = DEV_PATH) -> dict[str, Any]:
         if not eligible:
             raise ValueError("no evaluation questions have complete indexed evidence")
 
+        conn.execute("SET LOCAL enable_indexscan = on")
+        conn.execute("SET LOCAL enable_seqscan = off")
+        plan = conn.execute(
+            "EXPLAIN (FORMAT TEXT) " + RANK_SQL.format(distance=HALFVEC_DISTANCE),
+            (_vector_literal([0.0] * 384), LIMIT),
+        ).fetchall()
+        plan_text = "\n".join(row[0] for row in plan)
+        if "chunks_embedding_hnsw_idx" not in plan_text:
+            raise RuntimeError("PostgreSQL did not plan the expected halfvec HNSW index scan")
+
         model = load_model(MODEL_NAME)
         query_vectors = list(model.query_embed([item["question"] for item in eligible]))
         if len(query_vectors) != len(eligible):
             raise ValueError("embedding model returned an unexpected query count")
 
         results: dict[str, dict[str, list[dict[str, Any]]]] = {
-            "vector": {}, "halfvec": {},
+            "exhaustive_halfvec": {}, "hnsw_halfvec": {},
         }
-        times: dict[str, list[float]] = {"vector": [], "halfvec": []}
+        times: dict[str, list[float]] = {"exhaustive_halfvec": [], "hnsw_halfvec": []}
         top10_overlap = []
         top10_order_matches = 0
         for question, vector in zip(eligible, query_vectors):
             question_id = question["question_id"]
-            vector_hits, vector_seconds = _rank(conn, vector, halfvec=False)
-            halfvec_hits, halfvec_seconds = _rank(conn, vector, halfvec=True)
-            results["vector"][question_id] = vector_hits
-            results["halfvec"][question_id] = halfvec_hits
-            times["vector"].append(vector_seconds)
-            times["halfvec"].append(halfvec_seconds)
-            exact_ids = {hit["chunk_id"] for hit in vector_hits[:10]}
-            half_ids = {hit["chunk_id"] for hit in halfvec_hits[:10]}
-            top10_overlap.append(len(exact_ids & half_ids) / 10)
-            if [hit["chunk_id"] for hit in vector_hits[:10]] == [
-                hit["chunk_id"] for hit in halfvec_hits[:10]
+            exact_hits, exact_seconds = _rank(conn, vector, hnsw=False)
+            hnsw_hits, hnsw_seconds = _rank(conn, vector, hnsw=True)
+            results["exhaustive_halfvec"][question_id] = exact_hits
+            results["hnsw_halfvec"][question_id] = hnsw_hits
+            times["exhaustive_halfvec"].append(exact_seconds)
+            times["hnsw_halfvec"].append(hnsw_seconds)
+            exact_ids = {hit["chunk_id"] for hit in exact_hits[:10]}
+            hnsw_ids = {hit["chunk_id"] for hit in hnsw_hits[:10]}
+            top10_overlap.append(len(exact_ids & hnsw_ids) / 10)
+            if [hit["chunk_id"] for hit in exact_hits[:10]] == [
+                hit["chunk_id"] for hit in hnsw_hits[:10]
             ]:
                 top10_order_matches += 1
 
     return {
         "status": "passed",
-        "method": "exhaustive PostgreSQL distance order; no halfvec column or index created",
+        "method": "same stored halfvec vectors; exhaustive scan compared with forced HNSW index scan",
+        "hnsw_plan_verified": True,
         "indexed_documents": document_count,
         "dev_questions_total": len(questions),
         "eligible_questions": len(eligible),
         "excluded_questions": len(excluded),
         "top_k": LIMIT,
         "metrics": {
-            precision: aggregate_retrieval_metrics(eligible, result)
-            for precision, result in results.items()
+            mode: aggregate_retrieval_metrics(eligible, result)
+            for mode, result in results.items()
         },
         "mean_top10_chunk_overlap": round(statistics.mean(top10_overlap), 4),
         "questions_with_identical_top10_set": sum(value == 1.0 for value in top10_overlap),
@@ -159,8 +167,8 @@ def run(path: Path = DEV_PATH) -> dict[str, Any]:
             for precision, samples in times.items()
         },
         "accuracy_note": (
-            "This isolates float16 quantization of stored and query vectors; it does not "
-            "measure HNSW approximation, production schema changes, or answer entailment."
+            "This isolates HNSW approximation from exhaustive halfvec ranking; it does not "
+            "compare against the prior project's full-precision baseline or assess answer entailment."
         ),
     }
 

@@ -2,6 +2,10 @@
 
 Date: 2026-10-24
 
+Historical Phase 1C baseline from the Mindo Supabase project. That project was
+not modified during Phase 1E; current Evidence_AI measurements are in
+`reports/phase_1e_optimized.md`.
+
 ## Scope and implementation
 
 The CLI read the first 100 unique content-addressed rows from the local,

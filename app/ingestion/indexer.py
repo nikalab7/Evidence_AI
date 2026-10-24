@@ -54,19 +54,33 @@ def prepare_document(record: Mapping[str, Any]) -> dict[str, Any]:
             "sentences": sentences,
         })
 
-    metadata = {key: value for key, value in record.items() if key != "text"}
-    chunks = [
-        {
+    redundant_metadata_fields = {
+        "text", "doc_id", "content_hash", "source", "source_revision",
+        "source_split", "source_variants", "title",
+    }
+    metadata = {
+        key: value for key, value in record.items()
+        if key not in redundant_metadata_fields
+    }
+    chunks = []
+    search_from = 0
+    for position, chunk_text in enumerate(paragraph_chunks(text)):
+        start_char = text.find(chunk_text, search_from)
+        if start_char < 0:
+            raise ValueError("paragraph chunk cannot be located in canonical document text")
+        end_char = start_char + len(chunk_text)
+        chunks.append({
             "chunk_id": stable_chunk_id(doc_id, PARAGRAPH_STRATEGY, position, chunk_text),
             "doc_id": doc_id,
             "chunk_position": position,
             "chunking_strategy": PARAGRAPH_STRATEGY,
+            "start_char": start_char,
+            "end_char": end_char,
             "chunk_text": chunk_text,
             "embedding": None,
             "embedding_model": None,
-        }
-        for position, chunk_text in enumerate(paragraph_chunks(text))
-    ]
+        })
+        search_from = end_char
     return {
         "doc_id": doc_id,
         "content_hash": digest,

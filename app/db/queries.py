@@ -40,15 +40,16 @@ RETURNING source_id
 
 CHUNKS_UPSERT_SQL = """
 INSERT INTO public.chunks (
-    chunk_id, doc_id, chunk_position, chunking_strategy, chunk_text,
+    chunk_id, doc_id, chunk_position, chunking_strategy, start_char, end_char,
     embedding, embedding_model
 )
 SELECT incoming.chunk_id, incoming.doc_id, incoming.chunk_position,
-       incoming.chunking_strategy, incoming.chunk_text,
-       incoming.embedding::extensions.vector(384), incoming.embedding_model
+       incoming.chunking_strategy, incoming.start_char, incoming.end_char,
+       incoming.embedding::extensions.halfvec(384), incoming.embedding_model
 FROM jsonb_to_recordset(%s::jsonb) AS incoming(
     chunk_id text, doc_id text, chunk_position integer, chunking_strategy text,
-    chunk_text text, embedding text, embedding_model text
+    start_char integer, end_char integer, chunk_text text,
+    embedding text, embedding_model text
 )
 ON CONFLICT (chunk_id) DO NOTHING
 RETURNING chunk_id
@@ -64,19 +65,27 @@ SELECT source_id, doc_id, title_alias, title_normalized, source_url,
 FROM public.document_sources WHERE source_id = ANY(%s)
 """
 CHUNKS_SELECT_SQL = """
-SELECT chunk_id, doc_id, chunk_position, chunking_strategy, chunk_text, embedding_model
-FROM public.chunks WHERE chunk_id = ANY(%s)
+SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunking_strategy,
+       c.start_char, c.end_char,
+       substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char),
+       c.embedding_model
+FROM public.chunks AS c JOIN public.documents AS d ON d.doc_id = c.doc_id
+WHERE c.chunk_id = ANY(%s)
 """
 
 
 def apply_schema(conn: Connection, schema_sql: str) -> None:
-    """Apply only additive DDL after confirming pgvector and any existing tables."""
-    vector = conn.execute(
-        """SELECT n.nspname FROM pg_extension e
-           JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'vector'"""
-    ).fetchone()
-    if not vector or vector[0] != "extensions":
-        raise RuntimeError("pgvector must be installed in the extensions schema")
+    """Apply additive optimized DDL only in the dedicated, expected project."""
+    public_relations = conn.execute(
+        """SELECT table_name FROM information_schema.tables
+           WHERE table_schema = 'public' ORDER BY table_name"""
+    ).fetchall()
+    unexpected = {row[0] for row in public_relations} - set(TARGET_TABLES)
+    if unexpected:
+        raise RuntimeError(
+            "public schema contains unexpected tables; refusing schema changes: "
+            + ", ".join(sorted(unexpected))
+        )
     can_create = conn.execute(
         "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
     ).fetchone()[0]
@@ -85,6 +94,25 @@ def apply_schema(conn: Connection, schema_sql: str) -> None:
     _check_existing_tables(conn)
     conn.execute(schema_sql)
     _check_existing_tables(conn, require_all=True)
+    vector = conn.execute(
+        """SELECT n.nspname FROM pg_extension e
+           JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'vector'"""
+    ).fetchone()
+    if not vector or vector[0] != "extensions":
+        raise RuntimeError("pgvector must be installed in the extensions schema")
+    security = conn.execute(
+        """SELECT c.relname, c.relrowsecurity,
+                  has_table_privilege('anon', c.oid, 'SELECT'),
+                  has_table_privilege('authenticated', c.oid, 'SELECT'),
+                  has_table_privilege('service_role', c.oid, 'SELECT')
+           FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = 'public' AND c.relname = ANY(%s)
+           ORDER BY c.relname""",
+        (list(TARGET_TABLES),),
+    ).fetchall()
+    if (len(security) != len(TARGET_TABLES)
+            or any(not row[1] or row[2] or row[3] or not row[4] for row in security)):
+        raise RuntimeError("EvidenceAI tables have unexpected RLS or role grants")
 
 
 def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> None:
@@ -97,7 +125,8 @@ def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> No
         },
         "chunks": {
             "chunk_id": "text", "doc_id": "text", "chunk_position": "integer",
-            "chunking_strategy": "text", "chunk_text": "text", "embedding": "vector(384)",
+            "chunking_strategy": "text", "start_char": "integer", "end_char": "integer",
+            "embedding": "halfvec(384)",
             "embedding_model": "text", "tsv": "tsvector",
         },
     }
@@ -123,10 +152,12 @@ def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> No
             raise RuntimeError(f"public.{table} exists but is not a base table; refusing schema changes")
         for column, expected_type in expected[table].items():
             actual_type = columns[table].get(column)
-            type_matches = (actual_type.endswith("vector(384)") if expected_type == "vector(384)"
+            type_matches = (actual_type.endswith("halfvec(384)") if expected_type == "halfvec(384)"
                             else actual_type == expected_type)
             if not type_matches:
                 raise RuntimeError(f"public.{table} has an incompatible {column} column; refusing schema changes")
+        if table == "chunks" and "chunk_text" in columns[table]:
+            raise RuntimeError("public.chunks still has duplicate chunk_text; refusing schema changes")
 
 
 def read_database_metrics(conn: Connection) -> dict[str, Any]:
@@ -187,7 +218,7 @@ def read_database_metrics(conn: Connection) -> dict[str, Any]:
             "rows": embedding_rows,
             "value_bytes_total": embedding_bytes,
             "value_bytes_average": round(float(average_embedding_bytes), 2),
-            "note": "pg_column_size of vector values; excludes chunk row overhead and HNSW index",
+            "note": "pg_column_size of halfvec values; excludes chunk row overhead and HNSW index",
         },
     }
 
@@ -205,10 +236,12 @@ def read_indexed_source_evidence(conn: Connection) -> list[dict[str, Any]]:
     return [
         {"source_id": row[0], "title_normalized": row[1], "sentences": row[2], "chunk_text": row[3]}
         for row in conn.execute(
-            """SELECT s.source_id, s.title_normalized, s.sentences, c.chunk_text
+            """SELECT s.source_id, s.title_normalized, s.sentences,
+                      substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char)
                FROM public.document_sources s
                JOIN public.chunks c ON c.doc_id = s.doc_id
                                     AND c.chunking_strategy = 'paragraph'
+               JOIN public.documents d ON d.doc_id = c.doc_id
                ORDER BY s.source_id, c.chunk_position, c.chunk_id"""
         ).fetchall()
     ]
@@ -226,8 +259,8 @@ def insert_batch(conn: Connection, documents: Sequence[dict[str, Any]]) -> dict[
             if chunk["embedding"] is None or chunk["embedding_model"] is None:
                 raise ValueError("every chunk must be embedded before database insertion")
             chunk_rows.append({key: chunk[key] for key in (
-                "chunk_id", "doc_id", "chunk_position", "chunking_strategy", "chunk_text",
-                "embedding", "embedding_model",
+                "chunk_id", "doc_id", "chunk_position", "chunking_strategy",
+                "start_char", "end_char", "chunk_text", "embedding", "embedding_model",
             )})
 
     inserted_documents = _insert_ids(conn, DOCUMENTS_UPSERT_SQL, document_rows)
@@ -280,7 +313,8 @@ def _verify_source_rows(conn: Connection, rows: list[dict[str, Any]]) -> None:
 
 
 def _verify_chunk_rows(conn: Connection, rows: list[dict[str, Any]]) -> None:
-    fields = ("chunk_id", "doc_id", "chunk_position", "chunking_strategy", "chunk_text", "embedding_model")
+    fields = ("chunk_id", "doc_id", "chunk_position", "chunking_strategy",
+              "start_char", "end_char", "chunk_text", "embedding_model")
     _verify_rows(conn, CHUNKS_SELECT_SQL, rows, "chunk_id", fields, "chunk")
 
 
@@ -311,7 +345,17 @@ def verify_target_documents(conn: Connection, doc_ids: Sequence[str]) -> dict[st
            WHERE doc_id = ANY(%s) AND extensions.vector_dims(embedding) <> 384""",
         (list(doc_ids),),
     ).fetchone()[0]
+    invalid_offsets = conn.execute(
+        """SELECT count(*) FROM public.chunks c
+           JOIN public.documents d ON d.doc_id = c.doc_id
+           WHERE c.doc_id = ANY(%s)
+             AND (c.end_char > char_length(d.full_text)
+                  OR char_length(substring(d.full_text FROM c.start_char + 1
+                                           FOR c.end_char - c.start_char)) <> c.end_char - c.start_char)""",
+        (list(doc_ids),),
+    ).fetchone()[0]
     total_documents = conn.execute("SELECT count(*) FROM public.documents").fetchone()[0]
+    total_sources = conn.execute("SELECT count(*) FROM public.document_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT count(*) FROM public.chunks").fetchone()[0]
     return {
         "target_documents": target_docs,
@@ -320,9 +364,42 @@ def verify_target_documents(conn: Connection, doc_ids: Sequence[str]) -> dict[st
         "orphan_target_chunks": orphan_count,
         "orphan_target_sources": orphan_source_count,
         "wrong_dimension_target_embeddings": wrong_dimensions,
+        "invalid_target_chunk_offsets": invalid_offsets,
         "total_documents": total_documents,
+        "total_sources": total_sources,
         "total_chunks": total_chunks,
     }
+
+
+def build_hnsw_index_after_bulk_load(
+    conn: Connection,
+    *,
+    expected_documents: int,
+    expected_sources: int,
+    expected_chunks: int,
+) -> float:
+    """Build the halfvec HNSW index only after the verified 1K bulk load."""
+    import time
+
+    if expected_documents != 1_000:
+        raise ValueError("the Phase 1E HNSW build is restricted to exactly 1,000 documents")
+    actual = conn.execute(
+        """SELECT (SELECT count(*) FROM public.documents),
+                  (SELECT count(*) FROM public.document_sources),
+                  (SELECT count(*) FROM public.chunks)"""
+    ).fetchone()
+    if actual != (expected_documents, expected_sources, expected_chunks):
+        raise RuntimeError("refusing HNSW build before the exact bulk corpus is loaded")
+    started = time.perf_counter()
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx
+           ON public.chunks USING hnsw
+           (embedding extensions.halfvec_cosine_ops)"""
+    )
+    conn.execute("ANALYZE public.documents")
+    conn.execute("ANALYZE public.document_sources")
+    conn.execute("ANALYZE public.chunks")
+    return time.perf_counter() - started
 
 
 _RETRIEVAL_FILTER_COLUMNS = {
@@ -388,9 +465,10 @@ def semantic_search_chunks(
     literal = "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
     statement = sql.SQL(
         """WITH query_vector AS (
-               SELECT %s::extensions.vector(384) AS embedding
+               SELECT %s::extensions.halfvec(384) AS embedding
            )
-           SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunk_text, d.metadata,
+           SELECT c.chunk_id, c.doc_id, c.chunk_position,
+                  substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char), d.metadata,
                   COALESCE(p.sources, '[]'::jsonb) AS sources,
                   c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance
            FROM public.chunks c
@@ -450,7 +528,8 @@ def keyword_search_chunks(
                SELECT tsquery FROM query_fold
                ORDER BY term_number DESC LIMIT 1
            )
-           SELECT c.chunk_id, c.doc_id, c.chunk_position, c.chunk_text, d.metadata,
+           SELECT c.chunk_id, c.doc_id, c.chunk_position,
+                  substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char), d.metadata,
                   COALESCE(p.sources, '[]'::jsonb) AS sources,
                   ts_rank_cd(c.tsv, q.tsquery) AS keyword_score
            FROM public.chunks c
@@ -478,7 +557,7 @@ def cosine_search(conn: Connection, vector: Sequence[float], limit: int = 5) -> 
     """Run a real PostgreSQL pgvector cosine-distance query in ascending rank order."""
     literal = "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
     rows = conn.execute(
-        """WITH query_vector AS (SELECT %s::extensions.vector(384) AS embedding)
+        """WITH query_vector AS (SELECT %s::extensions.halfvec(384) AS embedding)
            SELECT c.chunk_id, c.doc_id, c.chunk_position,
                   c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance
            FROM public.chunks c CROSS JOIN query_vector q

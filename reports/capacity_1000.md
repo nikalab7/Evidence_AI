@@ -2,7 +2,9 @@
 
 Date: 2026-10-24
 
-Status: verified against the configured Supabase database; ingestion stopped at 1,000 documents.
+Historical Phase 1D baseline from the Mindo Supabase project. That project was
+not modified during Phase 1E; current Evidence_AI measurements are in
+`reports/phase_1e_optimized.md`.
 
 ## Scope and safety
 

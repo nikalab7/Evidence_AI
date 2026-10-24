@@ -1,6 +1,6 @@
 import pytest
 
-from app.db.queries import keyword_search_chunks
+from app.db.queries import keyword_search_chunks, semantic_search_chunks
 from app.evaluation.metrics import (
     aggregate_retrieval_metrics,
     indexed_evidence_pairs,
@@ -147,6 +147,26 @@ def test_keyword_query_preserves_punctuation_and_duplicate_terms_as_bound_input(
     query = "Runners, running RUNNER! \"OR\" -- 'quoted'"
     assert keyword_search_chunks(conn, query) == []
     assert conn.params == (query, 10)
+
+
+def test_semantic_sql_uses_halfvec_and_reconstructs_chunk_text_from_offsets():
+    class Result:
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def execute(self, statement, params):
+            self.statement = str(statement)
+            self.params = params
+            return Result()
+
+    conn = Connection()
+    semantic_search_chunks(conn, [0.0] * 384, limit=5)
+    assert "extensions.halfvec(384)" in conn.statement
+    assert "substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char)" in conn.statement
+    assert "c.embedding OPERATOR(extensions.<=>) q.embedding" in conn.statement
+    assert "chunk_text" not in conn.statement
+    assert conn.params[1] == 5
 
 
 def test_engine_returns_source_titles_excerpts_and_ranked_scores(monkeypatch):

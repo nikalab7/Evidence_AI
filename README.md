@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0, Phase 1C/1D, and the Phase 2 retrieval milestone are implemented. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The 200-question retrieval-dev set has 82 cases with complete supporting evidence in those chunks. Keyword retrieval now uses OR-based English FTS; it improved keyword recall, while equal-weight hybrid recall regressed against the prior AND query and semantic-only retrieval. The same-corpus measurements are recorded in [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Gemini RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
+Phase 0, Phase 1C/1D, Phase 1E, and Phase 2 retrieval are implemented. EvidenceAI uses the dedicated Supabase project `csenhlrsttuukzwglttf`; the former Mindo project is not used by this application. The database has 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional halfvec BGE embeddings. Chunk text is reconstructed from offsets into canonical document text. The 200-question retrieval-dev set has 82 cases with complete supporting evidence. Title-weighted OR FTS improved keyword and equal-weight hybrid metrics on those 82 questions; measured retrieval latency increased on the new project. Storage and retrieval details are in [`reports/phase_1e_optimized.md`](reports/phase_1e_optimized.md); the former project's retrieval measurements are a historical baseline in [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures remain estimates, not capacity verification. Gemini RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
 
 ## Project structure
 
@@ -115,7 +115,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 The server runs at `http://127.0.0.1:8000`; `GET /health` returns `{"status":"ok"}`. The health endpoint checks only that the API process responds. It does not claim Gemini or database health.
 
-Keep real credentials in `.env`, which Git ignores. `.env.example` contains names only. The local `app.preflight` command lists remaining gates and exits with code 1 while full ingestion is not cleared.
+Keep real credentials in `.env`, which Git ignores. `.env.example` contains names only. `connect_database()` refuses Supabase URLs that do not identify project `csenhlrsttuukzwglttf`; keep `DATABASE_URL` backend-only and update Render's secret separately before deploying database-backed features. The local `app.preflight` command lists remaining gates and exits with code 1 while full ingestion is not cleared.
 
 ## Service probes
 
@@ -126,7 +126,7 @@ Keep real credentials in `.env`, which Git ignores. `.env.example` contains name
 
 The first command lists available generation models and makes at most one small Gemini request. The second checks Supabase and `pgvector` without spending Gemini quota. Reports omit credentials and raw service error bodies. A successful connection and current database size do not prove that 50,000 records will fit.
 
-The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. Supabase measured 22,195,347 bytes at the 100-document Phase 1D baseline and 30,944,403 bytes after inserting through 1,000 documents; a later zero-insert rerun measured 31,796,371 bytes. The intervening size movement is not explained by the available evidence. See [`reports/capacity_1000.md`](reports/capacity_1000.md) for relation sizes, row counts, and estimates. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; a new Render build/restart check remains pending. 10K/50K capacity and final evaluation cases remain open. See the reports in `reports/`.
+The older database probe and capacity report describe the Mindo project and are historical. EvidenceAI was moved to its dedicated project for Phase 1E; actual schema, access controls, row counts, sizes, storage estimates, and retrieval comparisons are recorded in [`reports/phase_1e_optimized.md`](reports/phase_1e_optimized.md). The 10K/50K capacity projections are estimates, not capacity verification. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; verify the Render environment points to the new project before deploying database-backed features. See the reports in `reports/`.
 
 ## Render embedding preflight
 

@@ -32,24 +32,28 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   interface, deterministic Weighted RRF, and an evidence-gated evaluator with
   per-question output. Real before/after Supabase measurements cover the same
   82 dev questions fully represented in the indexed 1,000-document subset.
-- Phase 1E read-only storage analysis, a reproducible local embedding-thread
-  benchmark, and an exhaustive vector-versus-halfvec ranking comparison. The
-  schema optimization and migration steps are documented as a proposal only;
-  no database schema or data was changed.
+- Phase 1E project-identity fail-closed checks, additive optimized schema,
+  Unicode-safe chunk offsets, halfvec ingestion, title-weighted FTS triggers,
+  post-load HNSW creation, security grants/RLS, live 1K ingestion and
+  idempotence verification, storage measurements, retrieval evaluation, and
+  HNSW-vs-exhaustive ranking comparison on the dedicated Evidence_AI project.
+  Mindo was not modified.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 71 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 84 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- The 1,000-document ingestion and Phase 2 retrieval are verified against
-  Supabase. OR search raised keyword metrics but lowered equal-weight hybrid
-  metrics on the same 82-question evidence-qualified subset. File-upload parsers,
+- The previous OR-search baseline lowered equal-weight hybrid metrics on the
+  former Mindo-backed subset. Phase 1E moved the same 1,000 corpus documents to
+  the dedicated Evidence_AI project; title-weighted OR FTS improved keyword and
+  equal-weight hybrid metrics on the same 82 eligible questions. File-upload parsers,
   ingestion beyond 1,000, Gemini RAG, citation
   validation, and final answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
-- PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0
-  was enabled and a cosine smoke query passed. Baseline database size: 20,491,411
-  bytes. Full dataset capacity remains unverified. See reports/database_probe.json.
+- The old Mindo database probe remains historical. The current Evidence_AI
+  target is project `csenhlrsttuukzwglttf`, uses PostgreSQL 17.11 and pgvector
+  0.8.2, and measured 18,454,195 bytes after the 1K load. The 10K/50K figures
+  remain estimates; see `reports/phase_1e_optimized.md`.
 - The owner supplied a Render startup log showing the 384-dimensional FastEmbed
   check passed, with 0.1003s embedding latency and 300,912,640 bytes peak process
   RSS. Local build-time cache and two local restart checks passed; a post-change

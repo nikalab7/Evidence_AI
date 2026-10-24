@@ -19,6 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.db.connection import connect_database
 from app.db.queries import (
     apply_schema,
+    build_hnsw_index_after_bulk_load,
     cosine_search,
     insert_batch,
     read_database_document_ids,
@@ -139,11 +140,14 @@ def benchmark_cosine_search(
 def run_ingestion(
     document_limit: int = DEFAULT_DOCUMENT_LIMIT,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    threads: int = 1,
 ) -> dict[str, Any]:
     """Embed locally, write bounded parameterized batches, and verify persistence."""
     validate_document_limit(document_limit)
     if not 1 <= batch_size <= MAX_DOCUMENTS:
         raise ValueError(f"batch size must be between 1 and {MAX_DOCUMENTS}")
+    if not 1 <= threads <= 16:
+        raise ValueError("embedding threads must be between 1 and 16")
     total_started = time.perf_counter()
 
     phase_started = time.perf_counter()
@@ -155,7 +159,7 @@ def run_ingestion(
     expected_chunks = sum(len(document["chunks"]) for document in documents)
 
     phase_started = time.perf_counter()
-    model = load_model(MODEL_NAME)
+    model = load_model(MODEL_NAME, threads=threads)
     model_initialization_seconds = time.perf_counter() - phase_started
     phase_started = time.perf_counter()
     embed_documents(documents, model, MODEL_NAME, batch_size=batch_size)
@@ -182,6 +186,13 @@ def run_ingestion(
             for key, value in batch_result.items():
                 inserted[key] += value
 
+        index_build_seconds = build_hnsw_index_after_bulk_load(
+            conn,
+            expected_documents=document_limit,
+            expected_sources=expected_sources,
+            expected_chunks=expected_chunks,
+        ) if document_limit == MAX_DOCUMENTS else None
+
         after = read_database_metrics(conn)
         state = verify_target_documents(conn, doc_ids)
         search = benchmark_cosine_search(conn, query_vector)
@@ -194,8 +205,8 @@ def run_ingestion(
     if state["target_sources"] != expected_sources or state["target_chunks"] != expected_chunks:
         raise RuntimeError("database provenance or chunk counts do not match the selected corpus")
     if (state["orphan_target_chunks"] or state["orphan_target_sources"]
-            or state["wrong_dimension_target_embeddings"]):
-        raise RuntimeError("database contains orphan rows or embeddings with dimensions other than 384")
+            or state["wrong_dimension_target_embeddings"] or state["invalid_target_chunk_offsets"]):
+        raise RuntimeError("database contains invalid relations, offsets, or non-384-D embeddings")
 
     with connect_database(autocommit=True) as fresh_conn:
         fresh_conn.execute("SET statement_timeout = '30000'")
@@ -205,7 +216,10 @@ def run_ingestion(
             or fresh_state["target_chunks"] != expected_chunks
             or fresh_state["total_documents"] != expected_total_documents
             or fresh_state["orphan_target_chunks"] or fresh_state["orphan_target_sources"]
-            or fresh_state["wrong_dimension_target_embeddings"]):
+            or fresh_state["wrong_dimension_target_embeddings"]
+            or fresh_state["invalid_target_chunk_offsets"]
+            or fresh_state["total_sources"] != expected_sources
+            or fresh_state["total_chunks"] != expected_chunks):
         raise RuntimeError("fresh database connection could not verify inserted rows")
 
     total_seconds = time.perf_counter() - total_started
@@ -218,6 +232,7 @@ def run_ingestion(
         "embedding_dimensions": EXPECTED_DIMENSIONS,
         "chunking_strategy": "paragraph",
         "batch_size": batch_size,
+        "embedding_threads": threads,
         "inserted": inserted,
         "existing_documents_before": len(existing_ids),
         "expected_total_documents_after": expected_total_documents,
@@ -242,6 +257,7 @@ def run_ingestion(
         },
         "database_before": before,
         "database_after": after,
+        "hnsw_build_seconds": round(index_build_seconds, 3) if index_build_seconds is not None else None,
         "verified_state": state,
         "fresh_connection_read_passed": True,
         "cosine_search_benchmark": search,
@@ -255,9 +271,10 @@ def main() -> int:
         help=f"unique corpus documents to ensure in Supabase (maximum {MAX_DOCUMENTS})",
     )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--threads", type=int, default=1, help="local FastEmbed worker threads (Render remains at 1)")
     args = parser.parse_args()
     try:
-        report = run_ingestion(document_limit=args.limit, batch_size=args.batch_size)
+        report = run_ingestion(document_limit=args.limit, batch_size=args.batch_size, threads=args.threads)
     except psycopg.Error as exc:
         print(json.dumps({
             "status": "failed", "error": "database_error",

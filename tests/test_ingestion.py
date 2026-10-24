@@ -63,19 +63,35 @@ def test_document_source_and_chunk_ids_are_stable():
     assert source_id != stable_source_id(doc_id, "Other alias", "source", "r1", "train", [text])
 
 
+def test_chunk_offsets_reconstruct_unicode_and_repeated_paragraphs_exactly():
+    text = "雪🌱 e\u0301\n\nEcho.\n\nEcho."
+    document = prepare_document(_record(text, [
+        {"title": "Unicode", "sentences": ["Echo."]},
+    ]))
+    chunks = document["chunks"]
+    assert [text[chunk["start_char"]:chunk["end_char"]] for chunk in chunks] == [
+        chunk["chunk_text"] for chunk in chunks
+    ]
+    assert chunks[1]["chunk_text"] == chunks[2]["chunk_text"] == "Echo."
+    assert chunks[1]["start_char"] < chunks[2]["start_char"]
+
+
 def test_preparation_preserves_text_metadata_and_every_title_alias():
     aliases = [
         {"title": "Main title", "sentences": ["First sentence."]},
         {"title": "Alternate title", "sentences": ["First sentence."]},
     ]
     raw = _record("First sentence.", aliases)
+    raw["application_note"] = {"owner": "team-a"}
     prepared = prepare_document(raw)
     assert prepared["full_text"] == raw["text"]
-    assert prepared["metadata"] == {key: value for key, value in raw.items() if key != "text"}
+    assert prepared["metadata"] == {"application_note": {"owner": "team-a"}}
     assert [source["title_alias"] for source in prepared["sources"]] == [
         "Main title", "Alternate title",
     ]
     assert prepared["sources"][1]["sentences"] == ["First sentence."]
+    assert "chunk_text" not in CHUNKS_UPSERT_SQL.split("FROM jsonb_to_recordset", 1)[0]
+    assert "extensions.halfvec(384)" in CHUNKS_UPSERT_SQL
 
 
 def test_embedding_batch_validates_dimensions_and_keeps_model_name():
@@ -131,8 +147,8 @@ class _MemoryConnection:
             table = self.sources
             key = "source_id"
         elif statement == CHUNKS_SELECT_SQL:
-            fields = ("chunk_id", "doc_id", "chunk_position", "chunking_strategy", "chunk_text",
-                      "embedding_model")
+            fields = ("chunk_id", "doc_id", "chunk_position", "chunking_strategy",
+                      "start_char", "end_char", "chunk_text", "embedding_model")
             table = self.chunks
             key = "chunk_id"
         else:
@@ -159,6 +175,21 @@ def test_repeated_batch_insert_is_idempotent_and_insert_only():
     for statement in (DOCUMENTS_UPSERT_SQL, SOURCES_UPSERT_SQL, CHUNKS_UPSERT_SQL):
         assert "ON CONFLICT" in statement and "DO NOTHING" in statement
         assert "DO UPDATE" not in statement and "DELETE" not in statement
+
+
+def test_model_loader_supports_local_four_thread_embedding_without_changing_default(monkeypatch, tmp_path):
+    from app import model_cache
+
+    calls = []
+    monkeypatch.setattr(model_cache, "MODEL_CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(
+        model_cache, "TextEmbedding", lambda **kwargs: calls.append(kwargs) or object(),
+    )
+    model_cache.load_model("local", threads=4)
+    assert calls[0]["threads"] == 4
+    assert calls[0]["local_files_only"] is True
+    with pytest.raises(ValueError, match="at least 1"):
+        model_cache.load_model("local", threads=0)
 
 
 def test_document_limit_enforces_milestone_ceiling():

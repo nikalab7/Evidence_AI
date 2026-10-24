@@ -2,9 +2,10 @@
 
 Date: 2026-10-24
 
-Status: real semantic, PostgreSQL FTS, and Weighted RRF queries verified against
-the existing Supabase 1,000-document subset. No documents were ingested and no
-schema, API, Gemini, or UI changes were made.
+Status: frozen Phase 2 baseline from the former Mindo-backed 1,000-document
+subset. During Phase 1E, Mindo remained untouched; the same subset was loaded
+into the dedicated Evidence_AI project with title-weighted FTS and halfvec.
+Current measurements are in `reports/phase_1e_optimized.md`.
 
 ## Implementation
 
