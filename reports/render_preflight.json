@@ -1,0 +1,20 @@
+{
+  "source": "Render startup log supplied by the project owner",
+  "status": "passed",
+  "model": "BAAI/bge-small-en-v1.5",
+  "dimensions": 384,
+  "threads": 1,
+  "python_version": "3.11.9",
+  "platform": "Linux-6.8.0-1052-aws-x86_64-with-glibc2.36",
+  "render_cpu_count": "0.15",
+  "model_initialization_seconds": 7.2839,
+  "first_query_embedding_seconds": 0.1003,
+  "smoke_startup_seconds": 7.3842,
+  "app_startup_seconds": 12.6925,
+  "rss_before_bytes": 105291776,
+  "rss_after_model_bytes": 299245568,
+  "rss_after_embedding_bytes": 300912640,
+  "rss_delta_bytes": 195620864,
+  "peak_rss_bytes": 300912640,
+  "restart_check": "pending"
+}

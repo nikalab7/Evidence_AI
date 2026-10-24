@@ -63,9 +63,27 @@ def test_complete_configuration_cannot_pass_unmeasured_gates():
     assert report["gates"]["assignment"]["status"] == "reviewed"
     assert report["gates"]["dataset_uniqueness"]["status"] == "candidate_pool_audited"
     assert report["gates"]["evaluation_evidence_coverage"]["status"] == "partial"
-    assert report["gates"]["render_memory"]["status"] == "startup_passed_restart_pending"
+    assert report["gates"]["render_memory"]["status"] == "verified"
+    assert report["gates"]["render_memory"]["restart_check"] == "pending"
     assert report["gates"]["supabase_capacity"]["status"] == "not_verified"
     assert report["gates"]["gemini_availability"]["status"] == "not_verified"
+
+
+def test_render_memory_gate_needs_recorded_passing_evidence(tmp_path):
+    from app.preflight import render_memory_gate
+
+    missing = render_memory_gate(tmp_path / "missing.json")
+    assert missing["status"] == "not_verified"
+    report = tmp_path / "render.json"
+    report.write_text(json.dumps({
+        "status": "passed", "model": "BAAI/bge-small-en-v1.5", "dimensions": 384,
+        "peak_rss_bytes": 300_912_640, "first_query_embedding_seconds": 0.1003,
+    }), encoding="utf-8")
+    assert render_memory_gate(report)["status"] == "verified"
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload["peak_rss_bytes"] = 600_000_000
+    report.write_text(json.dumps(payload), encoding="utf-8")
+    assert render_memory_gate(report)["status"] == "not_verified"
 
 
 def test_cli_returns_nonzero_and_machine_readable_report(monkeypatch, capsys):
@@ -85,7 +103,8 @@ def test_secret_and_raw_dataset_paths_are_ignored_by_git_rules(tmp_path):
     subprocess.run(["git", "init", str(tmp_path)], capture_output=True, check=True)
     result = subprocess.run(
         ["git", "check-ignore", "--no-index", "-z", "--stdin"], cwd=tmp_path,
-        input=(b".env\0.env.production\0data/raw/hotpot.json\0.env.example\0"
+        input=(b".env\0.env.production\0data/raw/hotpot.json\0data/corpus.jsonl\0"
+               b".model_cache/model.onnx\0.env.example\0"
                b"AGENTS.md\0AGENTS.local.md\0CLAUDE.md\0docs/IMPLEMENTATION_PLAN_V1.0.txt\0"
                b"docs/UPGAMING_ASSIGNMENT.md\0docs/REQUIREMENTS_MAP.md\0reports/PHASE_0.md\0"
                b"README.md\0reports/AI_USAGE_REPORT.md\0app/config.py\0"),
@@ -93,7 +112,8 @@ def test_secret_and_raw_dataset_paths_are_ignored_by_git_rules(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.split(b"\0") == [
-        b".env", b".env.production", b"data/raw/hotpot.json", b"AGENTS.local.md", b"CLAUDE.md",
+        b".env", b".env.production", b"data/raw/hotpot.json", b"data/corpus.jsonl",
+        b".model_cache/model.onnx", b"AGENTS.local.md", b"CLAUDE.md",
         b"docs/IMPLEMENTATION_PLAN_V1.0.txt", b"docs/UPGAMING_ASSIGNMENT.md",
         b"docs/REQUIREMENTS_MAP.md", b"reports/PHASE_0.md", b"",
     ]

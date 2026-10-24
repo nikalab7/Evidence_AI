@@ -17,10 +17,12 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   logging, 384-dimension validation, and tests for secret/vector-free public responses.
 - A pinned, streaming HotpotQA audit utility, exact title+paragraph uniqueness
   counts, supporting-sentence coverage checks, unit tests, and aggregate documentation.
+- Build-time FastEmbed model cache download, runtime manifest checks, and a
+  readiness gate computed from the recorded Render measurements.
 
 ## Validation and limitations
 
-- Latest validation: isolated `.venv`, `python -m pytest -q` - 37 passed.
+- Latest focused validation: isolated `.venv`, Phase 0 smoke/cache/preflight tests - 20 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
 - The additional modules are explicitly placeholders; no future feature is claimed implemented.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
@@ -29,7 +31,8 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   bytes. Full dataset capacity remains unverified. See reports/database_probe.json.
 - The owner supplied a Render startup log showing the 384-dimensional FastEmbed
   check passed, with 0.1003s embedding latency and 300,912,640 bytes peak process
-  RSS. A separate Render restart check remains pending; details are in
+  RSS. Local build-time cache and two local restart checks passed; a post-change
+  Render deployment/restart check remains pending. Details are in
   reports/render_preflight.md.
 - A complete streaming scan of HotpotQA `distractor` revision
   `1908d6afbbead072334abe2965f91bd2709910ab` counted 482,021 unique train

@@ -33,6 +33,36 @@ The peak is below Render Free's documented 512 MB memory limit. The recorded
 value is this process's RSS/peak RSS; it is not a measurement of every process
 or service-level metric in the Render dashboard.
 
+The recorded Render memory gate is **verified** from this owner-supplied log:
+384 dimensions, 100.3 ms first query embedding, and 286.9 MiB peak RSS. The
+machine-readable measurements are in `reports/render_preflight.json`; the
+readiness gate reads that file and returns to `not_verified` if the evidence is
+missing, invalid, or over 512 MiB. A separate restart check is still pending.
+
+## Build-time model cache
+
+The 7.2839-second Render model initialization is a baseline measurement. It does
+not say whether the process downloaded the model, so the cause is not inferred.
+The Render build command now runs `scripts/download_model.py`, which uses the
+same absolute project-local `.model_cache/` path as runtime. It verifies a
+384-dimensional embedding, records each cached file's relative path and size in
+a manifest, and checks those files again. Render runtime requires that manifest
+and rejects missing or changed artifacts before loading the model.
+
+This repository change has not yet been deployed to Render, so the deployed
+build artifact and post-change startup log are not verified here. After a manual
+deployment, compare the `fastembed_build_cache` event and the startup event's
+`model_cache.verified`, `model_cache.artifact_count`, and
+`model_cache.total_bytes` fields against this baseline. Compare model initialization too, while treating
+it as a measurement rather than proof of whether a download occurred.
+
+The local build command completed successfully on Windows: it cached 9 files
+(67,181,330 bytes), verified a 384-dimensional query embedding, and passed the
+manifest check. With `FASTEMBED_REQUIRE_PREBUILT_CACHE=true`, two independent
+local application processes each returned HTTP 200 from `/health`. One startup
+log reported a verified 9-file cache and 0.8944-second model initialization.
+These are local checks and do not replace the pending Render build/restart check.
+
 ## Restart check
 
 This log confirms one successful Render startup and embedding check. It does not

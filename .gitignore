@@ -8,6 +8,8 @@ __pycache__/
 data/raw/
 data/cache/
 .cache/
+.model_cache/
+/data/corpus.jsonl
 
 # Local development instructions, planning, and interview notes
 /AGENTS.local.md

@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from app.model_cache import cache_is_required, create_embedding_model, prebuilt_cache_evidence
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EXPECTED_DIMENSIONS = 384
@@ -103,14 +104,10 @@ def run_embedding_smoke_test(
     if threads < 1:
         raise ValueError("FASTEMBED_THREADS must be at least 1")
 
-    if model_factory is None:
-        from fastembed import TextEmbedding
-
-        model_factory = TextEmbedding
-
     started = clock()
     rss_before = rss_reader()
-    model = model_factory(model_name=model_name, threads=threads)
+    cache_evidence = prebuilt_cache_evidence(model_name, EXPECTED_DIMENSIONS)
+    model = create_embedding_model(model_name, threads, model_factory, require_prebuilt_cache=False)
     model_ready = clock()
     rss_after_model = rss_reader()
     vectors = list(model.query_embed([SMOKE_QUERY]))
@@ -141,5 +138,7 @@ def run_embedding_smoke_test(
         "rss_delta_bytes": (rss_after_embedding - rss_before
                             if rss_before is not None and rss_after_embedding is not None else None),
         "peak_rss_bytes": peak_rss,
+        "model_cache": {"required": cache_is_required(), "verified": cache_evidence is not None,
+                        **(cache_evidence or {})},
     }
     return model, report

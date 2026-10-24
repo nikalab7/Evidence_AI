@@ -1,8 +1,44 @@
 """Phase 0 readiness inventory. Configuration alone never passes a live gate."""
 
 import json
+from pathlib import Path
 
 from app.config import Settings
+
+
+RENDER_PREFLIGHT_PATH = Path(__file__).resolve().parent.parent / "reports" / "render_preflight.json"
+RENDER_FREE_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024
+
+
+def render_memory_gate(evidence_path: Path = RENDER_PREFLIGHT_PATH) -> dict:
+    """Verify the memory gate from a recorded Render startup measurement."""
+    try:
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        peak = evidence["peak_rss_bytes"]
+        valid = (
+            evidence.get("status") == "passed"
+            and evidence.get("model") == "BAAI/bge-small-en-v1.5"
+            and evidence.get("dimensions") == 384
+            and isinstance(peak, int) and 0 < peak <= RENDER_FREE_MEMORY_LIMIT_BYTES
+            and isinstance(evidence.get("first_query_embedding_seconds"), (int, float))
+            and evidence["first_query_embedding_seconds"] >= 0
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        evidence = {}
+        valid = False
+    if not valid:
+        return {"status": "not_verified", "evidence": "No valid passing Render memory report is recorded."}
+    return {
+        "status": "verified",
+        "evidence": (
+            f"Recorded Render peak RSS {peak} bytes ({peak / 1048576:.1f} MiB), "
+            f"query latency {evidence['first_query_embedding_seconds']:.4f}s, "
+            "384 dimensions; within the 512 MiB gate. See reports/render_preflight.md."
+        ),
+        "peak_rss_bytes": peak,
+        "memory_limit_bytes": RENDER_FREE_MEMORY_LIMIT_BYTES,
+        "restart_check": evidence.get("restart_check", "pending"),
+    }
 
 
 def readiness_report(settings: Settings) -> dict:
@@ -25,8 +61,7 @@ def readiness_report(settings: Settings) -> dict:
                 "Live model listing and successful generation with selected model; quota constraints recorded."},
             "supabase_capacity": {"status": "not_verified", "required_evidence":
                 "Live connection, vector extension, measured table/index sizes at staged loads and 50k projection."},
-            "render_memory": {"status": "startup_passed_restart_pending", "evidence":
-                "Owner-provided Render log: 384 dimensions, 0.1003s query latency, 300,912,640 bytes peak RSS. A separate restart check remains pending. See reports/render_preflight.md."},
+            "render_memory": render_memory_gate(),
         },
         "citation_limit": "An exact quote match proves text presence, not factual entailment.",
     }
