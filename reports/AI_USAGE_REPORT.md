@@ -32,6 +32,10 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   interface, deterministic Weighted RRF, and an evidence-gated evaluator with
   per-question output. Real before/after Supabase measurements cover the same
   82 dev questions fully represented in the indexed 1,000-document subset.
+- Phase 1E read-only storage analysis, a reproducible local embedding-thread
+  benchmark, and an exhaustive vector-versus-halfvec ranking comparison. The
+  schema optimization and migration steps are documented as a proposal only;
+  no database schema or data was changed.
 
 ## Validation and limitations
 
