@@ -14,7 +14,3 @@ services:
         value: "true"
       - key: FASTEMBED_MODEL
         value: BAAI/bge-small-en-v1.5
-      - key: FASTEMBED_THREADS
-        value: "1"
-      - key: FASTEMBED_REQUIRE_PREBUILT_CACHE
-        value: "true"

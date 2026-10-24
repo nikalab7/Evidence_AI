@@ -43,25 +43,30 @@ missing, invalid, or over 512 MiB. A separate restart check is still pending.
 
 The 7.2839-second Render model initialization is a baseline measurement. It does
 not say whether the process downloaded the model, so the cause is not inferred.
-The Render build command now runs `scripts/download_model.py`, which uses the
-same absolute project-local `.model_cache/` path as runtime. It verifies a
-384-dimensional embedding, records each cached file's relative path and size in
-a manifest, and checks those files again. Render runtime requires that manifest
-and rejects missing or changed artifacts before loading the model.
+The Render build command runs `scripts/download_model.py`, which downloads to the
+same absolute project-local `.model_cache/` path used at runtime. It verifies a
+384-dimensional embedding, then reloads the model with `local_files_only=True`
+and verifies a second 384-dimensional embedding. Runtime also uses
+`local_files_only=True`, so it cannot download a missing model during startup.
 
 This repository change has not yet been deployed to Render, so the deployed
 build artifact and post-change startup log are not verified here. After a manual
-deployment, compare the `fastembed_build_cache` event and the startup event's
-`model_cache.verified`, `model_cache.artifact_count`, and
-`model_cache.total_bytes` fields against this baseline. Compare model initialization too, while treating
-it as a measurement rather than proof of whether a download occurred.
+deployment, confirm the `fastembed_build_cache` event reports
+`offline_load_passed: true`, then compare the startup event's dimensions, model
+initialization time, query latency, and memory with this baseline. Timing is a
+measurement and does not identify whether a download occurred.
 
-The local build command completed successfully on Windows: it cached 9 files
-(67,181,330 bytes), verified a 384-dimensional query embedding, and passed the
-manifest check. With `FASTEMBED_REQUIRE_PREBUILT_CACHE=true`, two independent
-local application processes each returned HTTP 200 from `/health`. One startup
-log reported a verified 9-file cache and 0.8944-second model initialization.
-These are local checks and do not replace the pending Render build/restart check.
+The earlier local build command completed successfully on Windows: it cached 9
+files (67,181,330 bytes), verified a 384-dimensional query embedding, and passed
+the then-current manifest check. Two independent local application processes
+each returned HTTP 200 from `/health`; one startup log reported a verified 9-file
+cache and 0.8944-second model initialization. Those checks predate the
+offline-only loader. After that change, the current `scripts/download_model.py`
+completed locally and reported `offline_load_passed: true` with 384 dimensions.
+A local FastAPI lifespan startup with the embedding startup check enabled
+completed, and `GET /health` returned HTTP 200. The current full pytest suite
+passed 43 tests. These local checks do not verify that Render's next built
+artifact contains the cache; that requires a deployment.
 
 ## Restart check
 

@@ -24,11 +24,10 @@ class FakeModel:
 
 
 def test_embedding_smoke_reports_dimensions_timings_and_memory(monkeypatch):
-    monkeypatch.setenv("FASTEMBED_THREADS", "1")
     times = iter([1.0, 1.1, 1.4])
     memory = iter([100, 140, 150])
     model, report = run_embedding_smoke_test(
-        model_factory=lambda **kwargs: FakeModel(), rss_reader=lambda: next(memory),
+        model_loader=lambda model_name: FakeModel(), rss_reader=lambda: next(memory),
         peak_rss_reader=lambda: 160,
         clock=lambda: next(times),
     )
@@ -45,7 +44,7 @@ def test_embedding_smoke_reports_dimensions_timings_and_memory(monkeypatch):
 def test_embedding_smoke_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="Expected 384 dimensions, got 768"):
         run_embedding_smoke_test(
-            model_factory=lambda **kwargs: FakeModel(768), rss_reader=lambda: 100,
+            model_loader=lambda model_name: FakeModel(768), rss_reader=lambda: 100,
         )
 
 
@@ -55,7 +54,7 @@ def test_embedding_smoke_rejects_multiple_vectors():
             return []
     with pytest.raises(ValueError, match="Expected one query vector"):
         run_embedding_smoke_test(
-            model_factory=lambda **kwargs: WrongCountModel(), rss_reader=lambda: 100,
+            model_loader=lambda model_name: WrongCountModel(), rss_reader=lambda: 100,
         )
 
 

@@ -133,15 +133,17 @@ service logs. `/health` remains a cheap liveness check; model measurements are
 not exposed by an HTTP route. Swagger and OpenAPI routes are disabled.
 
 The build command runs `scripts/download_model.py` into the project-local
-`.model_cache/` directory. Runtime requires and checks a manifest of those model
-files before loading FastEmbed. Local cache build and process-restart checks
-passed; verify the new artifact and startup log after manually deploying the
-Blueprint to Render.
+`.model_cache/` directory and verifies a second model load with network access
+disabled. Runtime uses that same cache with `local_files_only=True`, so a missing
+model fails startup instead of downloading unexpectedly. The current build
+script and a local lifespan startup with `/health` returned 200; verify the new
+artifact and startup log after manually deploying the Blueprint to Render.
 
 Create a Blueprint from this repository in Render to run the preflight. No
 Gemini or Supabase secret is required for this isolated check. Render's Free
-filesystem is ephemeral, so model cache downloads may recur after restart or
-spin-down; the startup logs will show the actual timing and memory each time.
+filesystem is ephemeral. The model cache is included by the build step in the
+deployed artifact; runtime does not fetch model files after a restart or
+spin-down.
 Automatic deploys are disabled in the Blueprint; start the first deployment
 from Render, then use the same service's restart action for the second check.
 The actual Render startup measurements, local baseline, and pending restart

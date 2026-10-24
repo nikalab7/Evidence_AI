@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from app.model_cache import cache_is_required, create_embedding_model, prebuilt_cache_evidence
+from app.model_cache import load_model
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EXPECTED_DIMENSIONS = 384
@@ -93,21 +93,17 @@ def process_peak_rss_bytes() -> int | None:
 
 def run_embedding_smoke_test(
     *,
-    model_factory: Callable[..., Any] | None = None,
+    model_loader: Callable[[str], Any] | None = None,
     rss_reader: Callable[[], int | None] = process_rss_bytes,
     peak_rss_reader: Callable[[], int | None] = process_peak_rss_bytes,
     clock: Callable[[], float] = time.perf_counter,
 ) -> tuple[Any, dict[str, Any]]:
     """Load one model and embed one query, returning the model and safe metrics."""
     model_name = os.getenv("FASTEMBED_MODEL", MODEL_NAME)
-    threads = int(os.getenv("FASTEMBED_THREADS", "1"))
-    if threads < 1:
-        raise ValueError("FASTEMBED_THREADS must be at least 1")
 
     started = clock()
     rss_before = rss_reader()
-    cache_evidence = prebuilt_cache_evidence(model_name, EXPECTED_DIMENSIONS)
-    model = create_embedding_model(model_name, threads, model_factory, require_prebuilt_cache=False)
+    model = (model_loader or load_model)(model_name)
     model_ready = clock()
     rss_after_model = rss_reader()
     vectors = list(model.query_embed([SMOKE_QUERY]))
@@ -125,7 +121,7 @@ def run_embedding_smoke_test(
         "status": "passed",
         "model": model_name,
         "dimensions": dimensions,
-        "threads": threads,
+        "threads": 1,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "render_cpu_count": os.getenv("RENDER_CPU_COUNT"),
@@ -138,7 +134,5 @@ def run_embedding_smoke_test(
         "rss_delta_bytes": (rss_after_embedding - rss_before
                             if rss_before is not None and rss_after_embedding is not None else None),
         "peak_rss_bytes": peak_rss,
-        "model_cache": {"required": cache_is_required(), "verified": cache_evidence is not None,
-                        **(cache_evidence or {})},
     }
     return model, report
