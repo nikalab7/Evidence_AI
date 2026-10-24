@@ -17,16 +17,16 @@ def readiness_report(settings: Settings) -> dict:
         "gates": {
             "assignment": {"status": "reviewed", "evidence":
                 "Project requirements reviewed. Design coverage only; implementation acceptance remains pending."},
-            "dataset_uniqueness": {"status": "not_verified", "required_evidence":
-                "Dataset provenance, title/text uniqueness, duplicate and variant counts; final SQL document count."},
-            "evaluation_evidence_coverage": {"status": "not_verified", "required_evidence":
-                "Disjoint dev/final cases; supporting titles AND supporting sentences present in selected corpus."},
+            "dataset_uniqueness": {"status": "candidate_pool_audited", "evidence":
+                "Pinned HotpotQA exact normalized title+paragraph scan: 507,494 unique records across both splits; near duplicates, final subset, and SQL counts remain pending. See reports/hotpotqa_audit.json."},
+            "evaluation_evidence_coverage": {"status": "partial", "evidence":
+                "Validation evidence was audited; train-only coverage is 73.31% of valid support sentences and 57.36% of valid questions. One support reference is invalid; final subset coverage remains pending. See reports/hotpotqa_audit.json."},
             "gemini_availability": {"status": "not_verified", "required_evidence":
                 "Live model listing and successful generation with selected model; quota constraints recorded."},
             "supabase_capacity": {"status": "not_verified", "required_evidence":
                 "Live connection, vector extension, measured table/index sizes at staged loads and 50k projection."},
-            "render_memory": {"status": "not_verified", "required_evidence":
-                "Actual Render service RSS and latency with fastembed/bge-small loaded and query embedding executed."},
+            "render_memory": {"status": "startup_passed_restart_pending", "evidence":
+                "Owner-provided Render log: 384 dimensions, 0.1003s query latency, 300,912,640 bytes peak RSS. A separate restart check remains pending. See reports/render_preflight.md."},
         },
         "citation_limit": "An exact quote match proves text presence, not factual entailment.",
     }

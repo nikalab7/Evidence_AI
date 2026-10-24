@@ -1,0 +1,62 @@
+{
+  "combined_context_corpus": {
+    "coverage_note": "This corpus union includes validation contexts; source presence does not measure retrieval quality.",
+    "duplicate_document_occurrences": 465873,
+    "duplicate_question_ids_across_splits": 0,
+    "duplicate_records_across_splits": 41108,
+    "meets_50000_unique_record_requirement": true,
+    "unique_document_records": 507494,
+    "validation_questions_with_valid_context_support": 0.999864956110736,
+    "validation_support_item_presence": 0.9999444598722577
+  },
+  "config": "distractor",
+  "dataset": "hotpotqa/hotpot_qa",
+  "deduplication_limit": "Exact normalized matches only; near-duplicate text variants are not merged.",
+  "evidence_limit": "Exact title and sentence matching measures evidence presence, not factual entailment.",
+  "license": "CC BY-SA 4.0",
+  "normalization": "Unicode NFKC, casefold, collapse whitespace",
+  "record_identity": "SHA-256 of normalized title and normalized joined paragraph text",
+  "revision": "1908d6afbbead072334abe2965f91bd2709910ab",
+  "scan": {
+    "complete": true,
+    "datasets_library_version": "4.8.4",
+    "max_rows_per_split": null,
+    "raw_rows_written_to_project": false,
+    "streaming": true
+  },
+  "source_url": "https://huggingface.co/datasets/hotpotqa/hotpot_qa",
+  "train": {
+    "context_paragraph_occurrences": 899667,
+    "duplicate_document_occurrences": 417646,
+    "question_rows": 90447,
+    "unique_document_records": 482021,
+    "unique_question_ids": 90447
+  },
+  "validation": {
+    "complete_question_train_coverage": 0.5736088600756348,
+    "context_paragraph_occurrences": 73700,
+    "duplicate_document_occurrences": 7119,
+    "evaluation_questions_with_supporting_facts": 7405,
+    "invalid_supporting_fact_examples": [
+      {
+        "question_id": "5ae61bfd5542992663a4f261",
+        "reason": "sentence_id_missing_or_empty"
+      }
+    ],
+    "invalid_supporting_fact_items": 1,
+    "question_rows": 7405,
+    "questions_with_all_support_in_train_contexts": 4247,
+    "questions_with_valid_context_evidence": 7404,
+    "supporting_fact_item_train_coverage": 0.7330593201510776,
+    "supporting_fact_items": 18005,
+    "supporting_fact_items_found_in_train_contexts": 13198,
+    "type_level_counts": {
+      "bridge/hard": 5918,
+      "comparison/hard": 1487
+    },
+    "unique_document_records": 66581,
+    "unique_question_ids": 7405,
+    "valid_supporting_fact_items_in_validation_context": 18004,
+    "validation_context_integrity": 0.9999444598722577
+  }
+}

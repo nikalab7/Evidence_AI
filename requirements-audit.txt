@@ -1,0 +1,2 @@
+# Optional local-only dependency for streaming the pinned HotpotQA audit.
+datasets==4.8.4

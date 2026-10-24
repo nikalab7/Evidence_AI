@@ -61,8 +61,11 @@ def test_complete_configuration_cannot_pass_unmeasured_gates():
     assert report["full_scale_ingestion_allowed"] is False
     assert len(report["gates"]) == 6
     assert report["gates"]["assignment"]["status"] == "reviewed"
-    assert all(gate["status"] == "not_verified"
-               for name, gate in report["gates"].items() if name != "assignment")
+    assert report["gates"]["dataset_uniqueness"]["status"] == "candidate_pool_audited"
+    assert report["gates"]["evaluation_evidence_coverage"]["status"] == "partial"
+    assert report["gates"]["render_memory"]["status"] == "startup_passed_restart_pending"
+    assert report["gates"]["supabase_capacity"]["status"] == "not_verified"
+    assert report["gates"]["gemini_availability"]["status"] == "not_verified"
 
 
 def test_cli_returns_nonzero_and_machine_readable_report(monkeypatch, capsys):

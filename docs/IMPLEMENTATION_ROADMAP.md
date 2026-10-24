@@ -18,5 +18,7 @@ deployment memory have been checked.
 7. **Deployment and handoff:** public hosting, persistence checks, setup guide,
    evaluation report, and AI usage report.
 
-The current repository implements only the foundation and service probes.
+The current repository implements the foundation, service probes, and a
+read-only HotpotQA corpus/evidence audit. Ingestion, retrieval, investigation,
+answer evaluation, and user-facing document routes remain incomplete.
 Directories and modules for later phases are placeholders, not completed features.
