@@ -1,5 +1,7 @@
 import hashlib
 
+import pytest
+
 from app.db.queries import (
     CHUNKS_SELECT_SQL,
     CHUNKS_UPSERT_SQL,
@@ -13,6 +15,11 @@ from app.ingestion.chunkers import paragraph_chunks
 from app.ingestion.corpus_core import content_hash
 from app.ingestion.deduplication import stable_chunk_id, stable_document_id, stable_source_id
 from app.ingestion.indexer import embed_documents, prepare_document
+from scripts.ingest_hotpotqa import (
+    benchmark_cosine_search,
+    validate_database_document_scope,
+    validate_document_limit,
+)
 
 
 def _record(text="First paragraph.", aliases=None):
@@ -152,3 +159,36 @@ def test_repeated_batch_insert_is_idempotent_and_insert_only():
     for statement in (DOCUMENTS_UPSERT_SQL, SOURCES_UPSERT_SQL, CHUNKS_UPSERT_SQL):
         assert "ON CONFLICT" in statement and "DO NOTHING" in statement
         assert "DO UPDATE" not in statement and "DELETE" not in statement
+
+
+def test_document_limit_enforces_milestone_ceiling():
+    assert validate_document_limit(1) == 1
+    assert validate_document_limit(1_000) == 1_000
+    with pytest.raises(ValueError, match="between 1 and 1000"):
+        validate_document_limit(0)
+    with pytest.raises(ValueError, match="between 1 and 1000"):
+        validate_document_limit(1_001)
+
+
+def test_database_document_scope_refuses_out_of_prefix_rows_and_overflow():
+    assert validate_database_document_scope({"a", "b"}, {"a", "b", "c"}) == 3
+    with pytest.raises(ValueError, match="outside the selected corpus prefix"):
+        validate_database_document_scope({"other"}, {"a", "b"})
+    with pytest.raises(ValueError, match="exceeds the 1,000-document"):
+        validate_database_document_scope(set(), {str(index) for index in range(1_001)})
+
+
+def test_cosine_benchmark_identifies_independent_query_and_no_quality_claim(monkeypatch):
+    import scripts.ingest_hotpotqa as ingestion
+
+    def fake_search(_conn, _vector, limit):
+        assert limit == 5
+        return [{"chunk_id": "c1", "doc_id": "d1", "chunk_position": 0,
+                 "cosine_distance": 0.2}]
+
+    monkeypatch.setattr(ingestion, "cosine_search", fake_search)
+    result = benchmark_cosine_search(object(), [0.0] * 384, warmups=0, runs=3)
+    assert result["query_source"].startswith("independent natural-language query")
+    assert result["retrieval_quality_evaluated"] is False
+    assert result["measured_runs"] == 3
+    assert result["latency_ms"]["minimum"] <= result["latency_ms"]["maximum"]

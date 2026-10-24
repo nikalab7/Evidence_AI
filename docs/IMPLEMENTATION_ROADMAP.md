@@ -19,10 +19,11 @@ deployment memory have been checked.
    evaluation report, and AI usage report.
 
 The current repository implements the foundation, service probes, a read-only
-HotpotQA corpus/evidence audit, and the verified 100-document Phase 1C slice.
-That slice creates an additive documents/provenance/chunks schema, stores
-384-dimensional embeddings, and verifies idempotence and cosine-distance SQL
-search. The next ingestion scale (1,000 documents) has not started. Remaining
-Phase 1 work includes other file parsers, the second chunking strategy and its
-comparison, and staged capacity measurements. Retrieval, investigation,
-answer evaluation, and user-facing document routes remain incomplete.
+HotpotQA corpus/evidence audit, and verified 100- and 1,000-document Supabase
+ingestion milestones. The additive documents/provenance/chunks schema stores
+384-dimensional embeddings; both milestones verified idempotence and real
+cosine-distance SQL. The 10K/50K storage projections remain estimates and the
+full dataset has not been ingested. Remaining Phase 1 work includes other file
+parsers, the second chunking strategy and its comparison, and further capacity
+checks. Retrieval, investigation, answer evaluation, and user-facing document
+routes remain incomplete.

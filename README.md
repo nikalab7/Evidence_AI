@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-The Phase 0 foundation and the verified 100-document Phase 1C ingestion slice are complete. Supabase contains 100 content-addressed documents, 100 provenance rows, and 100 paragraph chunks with 384-dimensional BGE embeddings. The selected 50,000-record corpus is generated locally; only the 100-document slice has been ingested. Full-scale capacity, 1,000-document ingestion, retrieval, RAG, document APIs, and the user-facing demo remain incomplete. The prior Render baseline is recorded, but a post-cache Render deployment/restart check remains pending. See [`reports/ingestion_100.md`](reports/ingestion_100.md).
+The Phase 0 foundation and verified Phase 1C/1D ingestion milestones are complete. Supabase currently contains 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional BGE embeddings. The selected 50,000-record corpus is generated locally; no more than 1,000 documents have been ingested. The 10K/50K storage figures are estimates, not capacity verification. Retrieval, RAG, document APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
 
 ## Project structure
 
@@ -57,7 +57,7 @@ evidence-ai/
 │   ├── audit_hotpotqa.py       Streaming uniqueness/evidence audit
 │   ├── build_corpus.py          Local corpus selection and coverage report
 │   ├── download_model.py        Render build-time FastEmbed cache
-│   ├── ingest_hotpotqa.py       Capped 100-document Supabase ingestion CLI
+│   ├── ingest_hotpotqa.py       Supabase ingestion CLI capped at 1,000 documents
 │   └── measure_db_size.py       Read-only database/table size and row counts
 ├── tests/                       Automated tests
 ├── eval/                         Retrieval dev and eval candidate cases
@@ -123,7 +123,7 @@ Keep real credentials in `.env`, which Git ignores. `.env.example` contains name
 
 The first command lists available generation models and makes at most one small Gemini request. The second checks Supabase and `pgvector` without spending Gemini quota. Reports omit credentials and raw service error bodies. A successful connection and current database size do not prove that 50,000 records will fit.
 
-The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. The database was 20,491,411 bytes before Phase 1C and measured 22,195,347 bytes after the 100-document slice and idempotence check; see [`reports/ingestion_100.md`](reports/ingestion_100.md) for the measured size change and row counts. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; a new Render build/restart check remains pending. Supabase full-scale capacity and final evaluation cases remain open. See the reports in `reports/`.
+The latest recorded probes show Gemini generation working with `gemini-3.5-flash-lite` and Supabase with `pgvector` 0.8.0. Supabase measured 22,195,347 bytes at the 100-document Phase 1D baseline and 30,944,403 bytes after inserting through 1,000 documents; a later zero-insert rerun measured 31,796,371 bytes. The intervening size movement is not explained by the available evidence. See [`reports/capacity_1000.md`](reports/capacity_1000.md) for relation sizes, row counts, and estimates. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; a new Render build/restart check remains pending. 10K/50K capacity and final evaluation cases remain open. See the reports in `reports/`.
 
 ## Render embedding preflight
 

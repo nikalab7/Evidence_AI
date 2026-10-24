@@ -129,20 +129,74 @@ def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> No
 
 
 def read_database_metrics(conn: Connection) -> dict[str, Any]:
-    """Measure database size plus row counts and total relation sizes for target tables."""
+    """Measure database, heap, index, row, and vector-column storage."""
     database_size = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
     tables: dict[str, dict[str, int]] = {}
+    indexes: list[dict[str, Any]] = []
     for table in TARGET_TABLES:
         relation = conn.execute("SELECT to_regclass(%s)", (f"public.{table}",)).fetchone()[0]
         if relation is None:
-            tables[table] = {"rows": 0, "total_relation_size_bytes": 0}
+            tables[table] = {
+                "rows": 0, "heap_bytes": 0, "table_storage_bytes": 0,
+                "index_bytes": 0, "total_relation_size_bytes": 0,
+            }
             continue
-        query = sql.SQL("SELECT count(*), pg_total_relation_size(%s::regclass) FROM {}.{}").format(
-            sql.Identifier("public"), sql.Identifier(table),
-        )
-        count, size = conn.execute(query, (f"public.{table}",)).fetchone()
-        tables[table] = {"rows": count, "total_relation_size_bytes": size}
-    return {"database_size_bytes": database_size, "tables": tables}
+        query = sql.SQL(
+            "SELECT count(*), pg_relation_size(%s::regclass), pg_table_size(%s::regclass), "
+            "pg_indexes_size(%s::regclass), pg_total_relation_size(%s::regclass) "
+            "FROM {}.{}"
+        ).format(sql.Identifier("public"), sql.Identifier(table))
+        count, heap_size, table_size, index_size, total_size = conn.execute(
+            query, (f"public.{table}",) * 4,
+        ).fetchone()
+        tables[table] = {
+            "rows": count,
+            "heap_bytes": heap_size,
+            "table_storage_bytes": table_size,
+            "index_bytes": index_size,
+            "total_relation_size_bytes": total_size,
+        }
+        for name, size in conn.execute(
+            """SELECT quote_ident(ns.nspname)||'.'||quote_ident(idx.relname),
+                      pg_relation_size(idx.oid)
+               FROM pg_index pi
+               JOIN pg_class tbl ON tbl.oid = pi.indrelid
+               JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
+               JOIN pg_class idx ON idx.oid = pi.indexrelid
+               JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+               WHERE tbl_ns.nspname = 'public' AND tbl.relname = %s
+               ORDER BY idx.relname""",
+            (table,),
+        ).fetchall():
+            indexes.append({"table": table, "name": name, "main_fork_bytes": size})
+
+    if tables["chunks"]["rows"]:
+        embedding_rows, embedding_bytes, average_embedding_bytes = conn.execute(
+            """SELECT count(*), COALESCE(sum(pg_column_size(embedding)), 0),
+                      COALESCE(avg(pg_column_size(embedding)), 0)
+               FROM public.chunks""",
+        ).fetchone()
+    else:
+        embedding_rows, embedding_bytes, average_embedding_bytes = 0, 0, 0
+    return {
+        "database_size_bytes": database_size,
+        "tables": tables,
+        "indexes": indexes,
+        "embedding_storage": {
+            "rows": embedding_rows,
+            "value_bytes_total": embedding_bytes,
+            "value_bytes_average": round(float(average_embedding_bytes), 2),
+            "note": "pg_column_size of vector values; excludes chunk row overhead and HNSW index",
+        },
+    }
+
+
+def read_database_document_ids(conn: Connection) -> set[str]:
+    """Return current document IDs, or an empty set before the table is created."""
+    relation = conn.execute("SELECT to_regclass('public.documents')").fetchone()[0]
+    if relation is None:
+        return set()
+    return {row[0] for row in conn.execute("SELECT doc_id FROM public.documents").fetchall()}
 
 
 def insert_batch(conn: Connection, documents: Sequence[dict[str, Any]]) -> dict[str, int]:
@@ -231,6 +285,12 @@ def verify_target_documents(conn: Connection, doc_ids: Sequence[str]) -> dict[st
            WHERE c.doc_id = ANY(%s) AND d.doc_id IS NULL""",
         (list(doc_ids),),
     ).fetchone()[0]
+    orphan_source_count = conn.execute(
+        """SELECT count(*) FROM public.document_sources s
+           LEFT JOIN public.documents d ON d.doc_id = s.doc_id
+           WHERE s.doc_id = ANY(%s) AND d.doc_id IS NULL""",
+        (list(doc_ids),),
+    ).fetchone()[0]
     wrong_dimensions = conn.execute(
         """SELECT count(*) FROM public.chunks
            WHERE doc_id = ANY(%s) AND extensions.vector_dims(embedding) <> 384""",
@@ -243,6 +303,7 @@ def verify_target_documents(conn: Connection, doc_ids: Sequence[str]) -> dict[st
         "target_sources": source_count,
         "target_chunks": chunk_count,
         "orphan_target_chunks": orphan_count,
+        "orphan_target_sources": orphan_source_count,
         "wrong_dimension_target_embeddings": wrong_dimensions,
         "total_documents": total_documents,
         "total_chunks": total_chunks,

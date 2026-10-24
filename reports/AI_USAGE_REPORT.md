@@ -25,13 +25,16 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
 - Phase 1C additive Supabase schema, paragraph chunking, stable source/chunk IDs,
   local BGE embeddings, parameterized psycopg ingestion, and live size, cosine,
   fresh-connection, and idempotence checks for the capped 100-document slice.
+- Phase 1D configurable ingestion limit with a hard 1,000-document ceiling,
+  read-only database/table/index/vector-size measurement, and live 100-to-1,000
+  Supabase capacity verification, cosine latency benchmark, and idempotence check.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 48 passed.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 51 passed.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
-- The 100-document ingestion milestone is verified against Supabase. File-upload
-  parsers, 1,000+ staged ingestion, retrieval, RAG, citation validation, and
+- The 1,000-document ingestion milestone is verified against Supabase. File-upload
+  parsers, ingestion beyond 1,000, retrieval, RAG, citation validation, and
   answer-quality evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - PostgreSQL connection succeeded after a configuration correction; pgvector 0.8.0
@@ -57,7 +60,7 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No ingestion beyond the first 100 documents, retrieval, ranking, citation
+- No ingestion beyond the first 1,000 documents, retrieval, ranking, citation
   validation, agentic loop, or evaluation-quality metrics are implemented or claimed.
 - The ingestion report records the actual first-run database size change and a
   later size increase observed across a zero-insert rerun; the cause of that
