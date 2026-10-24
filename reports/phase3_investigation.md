@@ -111,9 +111,10 @@ infrastructure change is proposed from this evidence.
 ### Gemini usage
 
 - Availability smoke: `gemini-3.5-flash-lite` appeared in the API model list and
-  a minimal generation succeeded. One model-list request and one generation
+  a minimal generation succeeded. The model-list probe plus one generation
   request took **1.04 s combined** and reported 7 prompt, 1 candidate, and 8
-  total tokens. The combined time does not isolate generation latency.
+  total tokens. The model-list page count was not retained, and the combined
+  time does not isolate generation latency.
 - Insufficient investigation: five successful HTTP 200 generation requests,
   no retries; per-request latencies were **1.102314, 0.840675, 0.848651,
   0.921368, 1.343353 s**. Usage metadata reported 42,038 prompt tokens,
@@ -121,7 +122,8 @@ infrastructure change is proposed from this evidence.
 - Answered investigation: three successful HTTP 200 generation requests, no
   retries; latencies were **1.280726, 1.326732, 1.247927 s**. Usage metadata
   reported 4,232 prompt, 264 candidate, and 4,496 total tokens.
-- Across those checks: nine generation requests and one model-list request.
+- Across those checks: nine generation requests; model-list request count was
+  not retained.
   The five-request cap applies independently to each investigation.
 
 ## Verification
