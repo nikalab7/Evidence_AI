@@ -66,13 +66,13 @@
       "supporting_titles_found": 486
     }
   },
-  "large_outputs_deferred": true,
+  "large_outputs_deferred": false,
   "license": "CC BY-SA 4.0",
   "normalization": "Unicode NFKC, casefold, collapsed whitespace",
   "outputs": {
-    "corpus_written": false,
+    "corpus_written": true,
     "eval_candidates_written": true,
-    "retrieval_dev_written": false
+    "retrieval_dev_written": true
   },
   "question_sets_disjoint": true,
   "retrieval_dev_count": 200,
