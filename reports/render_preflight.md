@@ -26,7 +26,7 @@ Source: startup log supplied by the project owner.
 | App startup through embedding check | 12.6925 s |
 | RSS before model | 105,291,776 B (100.4 MiB) |
 | RSS after model | 299,245,568 B (285.4 MiB) |
-| RSS after embedding / peak RSS | 300,912,640 B (286.9 MiB) |
+| RSS after embedding / peak RSS | 300,912,640 B (287.0 MiB) |
 | RSS increase over baseline | 195,620,864 B (186.5 MiB) |
 
 The peak is below Render Free's documented 512 MB memory limit. The recorded
@@ -34,7 +34,7 @@ value is this process's RSS/peak RSS; it is not a measurement of every process
 or service-level metric in the Render dashboard.
 
 The recorded Render memory gate is **verified** from this owner-supplied log:
-384 dimensions, 100.3 ms first query embedding, and 286.9 MiB peak RSS. The
+384 dimensions, 100.3 ms first query embedding, and 287.0 MiB peak RSS. The
 machine-readable measurements are in `reports/render_preflight.json`; the
 readiness gate reads that file and returns to `not_verified` if the evidence is
 missing, invalid, or over 512 MiB. A separate restart check is still pending.
