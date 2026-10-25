@@ -1,6 +1,7 @@
 """Allowlisted database tools used by the bounded investigation loop."""
 
 from time import perf_counter
+from collections.abc import Callable
 from typing import Any
 
 from app.db.queries import read_document_context
@@ -49,6 +50,8 @@ def execute_tool(
     retrieval_mode: str = "semantic",
     original_question: str | None = None,
     database_statement_timeout_ms: int = 12_000,
+    evaluation_retrieval_results: list[dict[str, Any]] | None = None,
+    search_function: Callable[..., list[dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Execute only declared read tools and return result plus sanitized timings."""
     started = perf_counter()
@@ -63,12 +66,16 @@ def execute_tool(
                 conn, embedding_model, name, arguments, retrieved=retrieved,
                 filters=filters, retrieval_mode=retrieval_mode,
                 original_question=original_question,
+                evaluation_retrieval_results=evaluation_retrieval_results,
+                search_function=search_function,
             )
     else:
         result, timing = _execute_tool(
             conn, embedding_model, name, arguments, retrieved=retrieved,
             filters=filters, retrieval_mode=retrieval_mode,
             original_question=original_question,
+            evaluation_retrieval_results=evaluation_retrieval_results,
+            search_function=search_function,
         )
     timing.update({"tool": name, "total_seconds": round(perf_counter() - started, 6)})
     return result, timing
@@ -78,11 +85,13 @@ def _execute_tool(
     conn: Any, embedding_model: Any, name: str, arguments: dict[str, Any], *,
     retrieved: dict[str, dict[str, Any]], filters: dict[str, str] | None,
     retrieval_mode: str, original_question: str | None,
+    evaluation_retrieval_results: list[dict[str, Any]] | None,
+    search_function: Callable[..., list[dict[str, Any]]] | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if name == "search_evidence":
         result, timing = _search(
             conn, embedding_model, arguments, retrieved, filters, retrieval_mode,
-            original_question,
+            original_question, evaluation_retrieval_results, search_function,
         )
     elif name == "get_document":
         result, timing = _get_document(conn, arguments, retrieved)
@@ -94,6 +103,8 @@ def _execute_tool(
 def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dict[str, Any]],
             base_filters: dict[str, str] | None, retrieval_mode: str,
             original_question: str | None,
+            evaluation_retrieval_results: list[dict[str, Any]] | None,
+            search_function: Callable[..., list[dict[str, Any]]] | None,
             ) -> tuple[dict[str, Any], dict[str, Any]]:
     query, limit, filters = args.get("query"), args.get("k", DEFAULT_TOOL_K), args.get("filters", {})
     if not isinstance(query, str) or not query.strip() or len(query) > MAX_TOOL_QUERY_CHARS:
@@ -108,14 +119,15 @@ def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dic
         return {"error": "invalid_search_filters"}, {}
     timings: dict[str, float] = {}
     diagnostics: dict[str, Any] = {}
-    hits = search(
+    search_impl = search_function or search
+    hits = search_impl(
         conn, query, mode=retrieval_mode, limit=limit, candidate_limit=20, model=model,
         filters={**(base_filters or {}), **filters}, timings=timings,
         include_evidence_text=True, include_validation_source=True,
         semantic_reference_query=original_question, diagnostics=diagnostics,
     )
     results = []
-    for hit in hits:
+    for rank, hit in enumerate(hits, start=1):
         full_text = hit.get("evidence_text", "")
         trusted_item = {
             "chunk_id": hit["chunk_id"], "doc_id": hit["doc_id"],
@@ -130,6 +142,13 @@ def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dic
             "text": full_text[:MAX_PROMPT_CHUNK_CHARS],
             "text_truncated": len(full_text) > MAX_PROMPT_CHUNK_CHARS,
         })
+        if evaluation_retrieval_results is not None:
+            evaluation_retrieval_results.append({
+                "chunk_id": hit["chunk_id"], "doc_id": hit["doc_id"],
+                "title": hit.get("title"), "titles": hit.get("titles", []),
+                "rank": rank, "score": hit.get("score"),
+                "evidence_text": full_text,
+            })
     timing = {key: round(value, 6) for key, value in timings.items()}
     timing.update(diagnostics)
     timing["retrieved_chunk_count"] = len(results)

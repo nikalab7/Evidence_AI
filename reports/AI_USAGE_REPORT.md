@@ -295,3 +295,33 @@ Local planning and personal preparation notes are excluded from the repository.
   title rescue is unnecessary. The full local suite passed 206 tests. The
   corrected code has not been deployed; the operator must deploy the pushed
   commit and inspect its sanitized `investigation_diagnostic` log event.
+
+## Phase 7 evaluation preparation - 2026-10-25
+
+- Codex assistance was used to prepare a deterministic 45-case final answer
+  evaluation set, preserving the selected HotpotQA candidate gold answers,
+  and to implement a budget-gated, resumable CLI using the production
+  investigation agent, retrieval modes, and citation validator. Gold answers
+  remain evaluator-side; only question text is passed to the agent.
+- The set contains 25 multi-hop/cross-document candidates, 5 single-hop facts
+  derived from separate supporting sentences, 8 synthetic unanswerable cases,
+  and 7 fixture-only conflict cases. Conflict evidence is injected into the
+  agent for reasoning/citation checks and was not written to Supabase.
+- The local generated corpus check found all 62/62 supporting references for
+  the 30 answerable final cases and confirmed the eight synthetic identifiers
+  are absent. The prior capacity report records 40/40 final candidates and
+  92/92 support references in the indexed corpus. A fresh read-only production
+  coverage query did not return a result in this session, so current live
+  coverage is not claimed as independently reverified.
+- The full local test suite passed 224 tests. The final live CLI now performs a
+  read-only fail-closed preflight for the Frankfurt project, the expected
+  50,000 indexed documents, and complete support coverage before it can make
+  any final-evaluation Gemini calls. A one-question dev smoke was
+  attempted through the runner but stopped before model initialization,
+  database connection, or Gemini usage because the local investigation daily
+  budget is 0. No final held-out Gemini calls were made. Full evaluation usage
+  is estimated at 121 investigations and at most 605 Gemini HTTP requests;
+  Render's `sync: false` budget and provider quota were not accessible.
+- No database writes, schema changes, deployment, corpus changes, or held-out
+  tuning were performed. Detailed scope and reproducible commands are in
+  `reports/final_evaluation.md`.

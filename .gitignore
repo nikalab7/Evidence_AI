@@ -19,3 +19,7 @@ data/cache/
 /docs/REQUIREMENTS_MAP.md
 /reports/PHASE_0.md
 /reports/phase5_logs/
+/reports/final_evaluation_results.jsonl
+/reports/final_evaluation_smoke.jsonl
+/reports/.final_evaluation_budget.jsonl
+/reports/.final_evaluation_budget.jsonl.lock

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from collections.abc import Mapping
 from typing import Any, Literal
 
@@ -44,6 +45,8 @@ def investigate(
     started_at: float | None = None,
     database_connection_seconds: float = 0.0,
     model_initialization_seconds: float = 0.0,
+    capture_evaluation_details: bool = False,
+    search_function: Callable[..., list[dict[str, Any]]] | None = None,
 ) -> InvestigationResult:
     """Run up to four retrieval tools and five actual Gemini HTTP requests."""
     started = started_at if started_at is not None else time.perf_counter()
@@ -60,6 +63,7 @@ def investigate(
         {"role": "user", "parts": [{"text": question.strip()}]},
     ]
     retrieved: dict[str, dict[str, Any]] = {}
+    evaluation_retrieval_results: list[dict[str, Any]] = []
     api_calls, tool_calls = 0, 0
     usage: dict[str, int] = {}
     model_name = getattr(getattr(llm_client, "settings", None), "gemini_model", "") or DEFAULT_GEMINI_MODEL
@@ -106,6 +110,10 @@ def investigate(
                     retrieval_mode=retrieval_mode,
                     original_question=question,
                     database_statement_timeout_ms=database_statement_timeout_ms,
+                    evaluation_retrieval_results=(
+                        evaluation_retrieval_results if capture_evaluation_details else None
+                    ),
+                    search_function=search_function,
                 )
                 outcome = "error" if "error" in result else "ok"
             except InvestigationTimeout:
@@ -116,6 +124,10 @@ def investigate(
                           "total_seconds": round(time.perf_counter() - tool_started, 6),
                           "error_type": type(exc).__name__}
             tool_calls += 1
+            if function.name == "search_evidence" and capture_evaluation_details:
+                for item in evaluation_retrieval_results:
+                    if "tool_call_index" not in item:
+                        item["tool_call_index"] = tool_calls
             timing.update({"step": tool_calls, "outcome": outcome})
             timing["arguments"] = trace_arguments(
                 function.name, safe_args, original_question=question,
@@ -211,5 +223,13 @@ def investigate(
         "draft_claim_count": len(claim_items),
         "verified_claim_count": len(verified["claims"]),
         "rejected_claim_count": len(verified["dropped_claim_ids"]),
+        "draft_citation_count": sum(
+            len(item.get("citations", []))
+            for item in claim_items if isinstance(item, Mapping)
+            and isinstance(item.get("citations"), list)
+        ),
+        "verified_citation_count": sum(len(claim["citations"]) for claim in verified["claims"]),
     }
+    if capture_evaluation_details:
+        trace["evaluation_retrieval_results"] = evaluation_retrieval_results
     return finish(verified, trace, started, model_name)

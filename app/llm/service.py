@@ -1,6 +1,7 @@
 """Local investigation lifecycle: one verified database session and one LLM client."""
 
 from time import perf_counter
+from collections.abc import Callable
 from typing import Any
 
 from app.config import Settings
@@ -13,7 +14,10 @@ from app.model_cache import load_model
 
 def run_investigation(question: str, *, settings: Settings | None = None, model: Any | None = None,
                       llm_client: Any | None = None,
-                      retrieval_mode: RetrievalMode = "semantic") -> dict[str, Any]:
+                      retrieval_mode: RetrievalMode = "semantic",
+                      capture_evaluation_details: bool = False,
+                      search_function: Callable[..., list[dict[str, Any]]] | None = None,
+                      ) -> dict[str, Any]:
     """Open one fail-closed Supabase connection and reuse it for every tool call."""
     settings = settings or Settings.load()
     if project_ref_from_database_url(settings.database_url) != EXPECTED_SUPABASE_PROJECT_REF:
@@ -39,6 +43,8 @@ def run_investigation(question: str, *, settings: Settings | None = None, model:
             deadline=total_started + settings.investigation_timeout_seconds,
             started_at=total_started, database_connection_seconds=connection_seconds,
             model_initialization_seconds=model_seconds,
+            capture_evaluation_details=capture_evaluation_details,
+            search_function=search_function,
         )
         output = result.as_dict()
         output["trace"]["database_project_ref"] = EXPECTED_SUPABASE_PROJECT_REF

@@ -4,7 +4,9 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. Phase 6B document management and the Phase 6B.1 compatibility review are implemented locally. The operator reports that Phase 6B migration `20261025133854` was applied to Frankfurt and verified with 50,000 documents, 50,018 sources, 50,000 chunks, and an empty `managed_uploads` table. Codex independently performed a read-only check of the synthetic replacement record and one public investigation request; the endpoint returned HTTP 200 with `insufficient` and no citations. The cause is still under investigation, and this retrieval diagnostic change has not been deployed. See [`reports/replacement_semantic_retrieval.md`](reports/replacement_semantic_retrieval.md) and [`reports/phase6b_2_activation.md`](reports/phase6b_2_activation.md). The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
+Phase 0 through Phase 6B are implemented. The owner reports that Phase 6B migration `20261025133854` was applied to Frankfurt and verified with 50,000 documents, 50,018 sources, 50,000 chunks, and an empty `managed_uploads` table. The owner also reports that the semantic retrieval fix for replaced uploads has been deployed and answered the previously failing question with a verified citation; this workspace has not independently rechecked the live deployment. See [`reports/replacement_semantic_retrieval.md`](reports/replacement_semantic_retrieval.md) and [`reports/phase6b_2_activation.md`](reports/phase6b_2_activation.md). The latest capacity and retrieval evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md) and [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md).
+
+Phase 7 evaluation assets and the resumable runner are prepared. The 200-question retrieval development set remains separate. The held-out candidate pool was not used for tuning; 25 unchanged answerable cases were selected for the final set and have not been sent to Gemini. The 45-case set also includes single-hop, unanswerable, and fixture-only conflict cases. The full live answer evaluation is still pending; see [`reports/final_evaluation.md`](reports/final_evaluation.md).
 
 The single-service FastAPI application serves the investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
 
@@ -62,7 +64,9 @@ evidence-ai/
 │   │   └── abstention.py        Insufficient-evidence response
 │   ├── evaluation/
 │   │   ├── metrics.py           Evidence-gated Recall@K and MRR
-│   │   └── run.py               Placeholder
+│   │   ├── answer_metrics.py    Answer, citation, and evidence coverage metrics
+│   │   ├── final_runner.py      Checkpointed, budget-gated final evaluation
+│   │   └── reporting.py         Final evaluation report rendering
 │   ├── templates/
 │   │   ├── library.html         Authenticated Document Library
 │   │   └── investigate.html     Responsive investigation interface
@@ -76,10 +80,12 @@ evidence-ai/
 │   ├── ingest_hotpotqa.py       Staged Supabase ingestion CLI capped at 50,000 documents
 │   ├── retrieve.py              Natural-language semantic/keyword/hybrid CLI
 │   ├── evaluate_retrieval.py    Evidence-gated real Supabase retrieval evaluation
+│   ├── prepare_final_eval.py    Reproducible held-out answer case selection
+│   ├── evaluate_final.py       Offline audit and budget-gated live final runner
 │   ├── compare_chunking.py      Local synthetic chunking/retrieval comparison
 │   └── measure_db_size.py       Read-only database/table size and row counts
 ├── tests/                       Automated tests
-├── eval/                         Retrieval dev and eval candidate cases
+├── eval/                         Retrieval dev, candidate pool, and final answer cases
 ├── reports/                     Sanitized service evidence and AI usage report
 ├── docs/                         Public requirements, roadmap, architecture
 ├── AGENTS.md                     Project-specific coding instructions
@@ -118,6 +124,55 @@ rules are documented in [`docs/HOTPOTQA_CORPUS_BUILD.md`](docs/HOTPOTQA_CORPUS_B
 The default builder writes the report and 40 candidate questions; use
 `--write-large-files` to regenerate the 200-question retrieval set and local
 50,000-record corpus.
+
+## Phase 7: final answer evaluation
+
+`eval/final_answer_eval.jsonl` contains 45 reproducible cases: 25 selected
+multi-hop HotpotQA questions with unchanged gold answers, 5 single-hop facts,
+8 synthetic unanswerable questions, and 7 synthetic conflict fixtures. The
+conflict fixtures use injected text in the production agent and citation
+validator; they do not test database retrieval and were not ingested. The 200
+retrieval-development questions are a separate file.
+
+Regenerate the cases and manifest locally (requires the Git-ignored corpus):
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.prepare_final_eval
+.\.venv\Scripts\python.exe -m scripts.evaluate_final
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --check-indexed-coverage
+```
+
+The default command is an offline audit and makes no Gemini or database call.
+The coverage command is read-only and checks the fail-closed Frankfurt project.
+Run one development smoke first, then review its request count and the Gemini
+project quota:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --dev-smoke --confirm-api-usage
+```
+
+Only after reviewing the estimate and approving the usage, start the final
+comparison:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --confirm-api-usage
+```
+
+The full comparison plans 121 investigations (38 production-pipeline cases in
+each of semantic, keyword, and hybrid modes, plus 7 fixture-only conflict
+investigations) and allows up to 605 Gemini HTTP requests. A JSONL result and
+rolling-24-hour local budget ledger are fsynced as work progresses. Completed
+calls are skipped on resume; an incomplete final result line is discarded, but
+its interrupted reservation remains uncertain and is not retried automatically.
+The final command first revalidates the fixed dataset, unchanged gold answers,
+and local corpus support, then checks Frankfurt identity, 50,000 documents, and
+complete indexed answerable support before any Gemini call. Set a positive local
+`INVESTIGATION_DAILY_BUDGET` only after checking available Gemini quota. The
+current local value is zero; the Frankfurt Render Blueprint uses `sync: false`,
+so its secret value and provider quota are not visible in this repository.
+Generated result files are Git-ignored. Final metrics remain pending until an
+operator-approved live run completes. Exact quote validation is evidence
+presence, not proof of factual entailment.
 
 ## Local setup (PowerShell, Python 3.11+)
 
