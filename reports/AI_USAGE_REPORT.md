@@ -41,15 +41,16 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
 
 ## Validation and limitations
 
-- Latest full validation: isolated `.venv`, `python -m pytest -q` - 106 passed
-  after the Frankfurt region migration.
+- Latest full validation: isolated `.venv`, `python -m pytest -q` - 112 passed
+  after the Phase 5 staged 50,000-document ingestion.
 - Uvicorn started locally and `GET /health` returned `{"status":"ok"}`.
 - The previous OR-search baseline lowered equal-weight hybrid metrics on the
   former Mindo-backed subset. Phase 1E moved the same 1,000 corpus documents to
   the dedicated Evidence_AI project; title-weighted OR FTS improved keyword and
-  equal-weight hybrid metrics on the same 82 eligible questions. File-upload parsers,
-  ingestion beyond 1,000, Gemini RAG, citation
-  validation, and final answer-quality evaluation remain incomplete and are not claimed.
+  equal-weight hybrid metrics on the same 82 eligible questions. Later Phase 3
+  implemented Gemini investigation and citation validation; Phase 5 loaded
+  50,000 documents. File-upload parser coverage and final answer-quality
+  evaluation remain incomplete and are not claimed.
 - Live Gemini generation succeeded with `gemini-3.5-flash-lite`.
 - The old Mindo database probe remains historical. The former Sydney
   Evidence_AI project is `csenhlrsttuukzwglttf`; the current Frankfurt target
@@ -77,8 +78,9 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   train-only evidence coverage was 73.3% of support sentences and 57.36% of
   questions with all evidence present. One source reference is unresolved.
   Full details and limitations are in reports/hotpotqa_audit.json.
-- No ingestion beyond 1,000 documents was performed. Phase 2 retrieval metrics
-  remain title-level only; they do not measure answer correctness or entailment.
+- At the Phase 1E checkpoint, ingestion was capped at 1,000 documents; Phase 5
+  later loaded 50,000. Retrieval metrics remain title-level and do not measure
+  answer correctness or entailment.
 - The ingestion report records the actual first-run database size change and a
   later size increase observed across a zero-insert rerun; the cause of that
   increase was not established. See reports/ingestion_100.md.
@@ -117,3 +119,26 @@ Local planning and personal preparation notes are excluded from the repository.
   and chunk reconstruction, security grants, retrieval, and Gemini answer and
   abstention behavior. The full suite passed 106 tests. Actual measurements,
   limitations, and Render follow-up steps are in `reports/region_migration.md`.
+
+## Phase 5 addition — 2026-10-25
+
+- Codex assistance was used to implement the staged, resumable ingestion CLI,
+  focused stage-safety tests, and the audit report; to monitor detached local
+  runs; and to execute the approved checks against the Frankfurt Evidence_AI
+  project. The owner approved the 50K target and capacity thresholds.
+- The run used the existing schema, paragraph chunking, BAAI/bge-small-en-v1.5,
+  and four local embedding threads. It did not write to Mindo or Sydney, change
+  schema/retrieval/Gemini/UI code, or execute destructive SQL.
+- Live verification reached 50,000 documents, 50,018 provenance records, and
+  50,000 chunks; integrity and idempotence checks passed. The final measured DB
+  size was 304,576,179 bytes, below the 450 MB gate. The complete suite passed
+  112 tests.
+- Full development retrieval results on 200 eligible questions and the matched
+  82-question regression comparison are recorded in `reports/capacity_50k.md`.
+  All three retrieval modes regressed on the matched 1K cohort, especially OR
+  keyword search. The 40 final candidates were checked for evidence coverage
+  only and were not used to tune retrieval or invoke the investigation agent.
+- A 221,184-byte difference between the final stage-size sample and the
+  zero-insert rerun remains unexplained. Supabase physical disk usage was not
+  measured through the dashboard; the report labels the WAL/headroom result as
+  an SQL-based estimate.
