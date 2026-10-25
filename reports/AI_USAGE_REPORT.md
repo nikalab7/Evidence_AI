@@ -231,3 +231,15 @@ Local planning and personal preparation notes are excluded from the repository.
   the migration, database transaction behavior, grants, and live upload memory
   remain unverified. See `reports/phase6b_1_safety_review.md` for the operator
   checklist and pending gates.
+
+## Phase 6B.2 activation preflight — 2026-10-25
+
+- Codex assistance was used to run a sanitized local tool/configuration check,
+  verify the local test suite, and document the activation gate results and
+  operator handoff in `reports/phase6b_2_activation.md`.
+- Docker/Podman and a local PostgreSQL service were unavailable, so real
+  PostgreSQL integration could not start. No production connection, migration,
+  CRUD operation, Render setting change, or deployment was attempted. The
+  conditional activation remains blocked pending a disposable local database.
+- The full local test suite passed 192 tests; this is not PostgreSQL or
+  production verification.
