@@ -256,3 +256,17 @@ Local planning and personal preparation notes are excluded from the repository.
   the required preflight.
 - The full local suite passed 192 tests; this is not live PostgreSQL or
   production verification.
+
+## Phase 6B final Render handoff — 2026-10-25
+
+- Codex assistance was used to record the operator-reported migration result,
+  review the existing document-management routes and authentication gate, and
+  change the Frankfurt Blueprint's daily investigation budget from a hardcoded
+  zero to a manually managed `sync: false` value. A regression test protects
+  the Blueprint setting and deployment commands.
+- The connected Supabase and Render tools were unavailable. Operator-reported
+  production database checks are labeled as such; they were not independently
+  queried. No production records or live Render settings were changed, and no
+  deployment or live CRUD test was performed.
+- The complete local suite passed 194 tests. This does not verify production
+  migration state, Render secrets, or upload memory.

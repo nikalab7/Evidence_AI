@@ -1,145 +1,130 @@
-# Phase 6B.2 — Database Verification and Controlled Activation
+# Phase 6B.2 — Activation and Render Handoff
 
-## Status: BLOCKED before production SQL
+## Database migration: operator-reported complete
 
-The user authorized the additive migration only after a fresh Frankfurt
-preflight. This session has no connected Supabase database operation tool. The
-available database-related connector is for Cloudflare D1, not Supabase. I did
-not substitute the local `DATABASE_URL`, access Frankfurt directly, or rely on
-the previous owner-reported counts as a fresh verification. No production SQL,
-CRUD operation, or deployment was attempted. Mindo and Sydney were not
-contacted; the held-out evaluation set was not accessed.
+The operator reports that migration `20261025133854` (`phase6b_managed_uploads`)
+was applied to Frankfurt EvidenceAI project `nldnpqhqrfwjgxcqeuru`. The operator
+reports the following **after** values and checks:
 
-At the start, `HEAD` and `origin/master` were both
-`77eb2d4729903991944f197be2d384084de008a1`. The user's read-only figures
-(PostgreSQL 17.11, 50,000 documents, 50,018 sources, and 50,000 chunks) are
-recorded as **owner-reported, not independently verified in this turn**.
-No migration statement was executed, so there is no actual after-count
-measurement; the source counts must be re-read through the connected tool
-before claiming that they remain unchanged.
+| Check | Operator-reported result |
+|---|---:|
+| PostgreSQL | 17.11 |
+| `documents` | 50,000 |
+| `document_sources` | 50,018 |
+| `chunks` | 50,000 |
+| `managed_uploads` | 0 |
+| RLS | Enabled |
+| `anon` / `authenticated` SELECT | None |
+| `service_role` | CRUD confirmed |
+| Composite source/document FK | Confirmed |
+| Supporting unique index | Confirmed |
 
-## Preflight findings
+These are owner-provided results, not checks performed by Codex. There was no
+connected Supabase database tool in this session, so I did not reconnect to the
+project, rerun the migration, query row counts, or independently verify grants,
+indexes, search objects, backup, or storage. No production database records
+were changed by Codex. Mindo, Sydney, and the held-out evaluation data were not
+accessed.
 
-I read the complete
-`migrations/proposals/phase6b_managed_uploads.sql` and checked the local
-migration directory. It contains the existing base `migrations/schema.sql` and
-this one Phase 6B proposal; there is no second local Phase 6B migration file.
-Static review finds the proposal limited to:
+The migration file remains
+`migrations/proposals/phase6b_managed_uploads.sql`. Do not run it again. The
+application is not deployed or live-tested against the new table.
 
-- the approved unique `document_sources_source_doc_idx` on
-  `(source_id, doc_id)`;
-- `public.managed_uploads`, its constraints and listing index;
-- RLS enablement, revoking `PUBLIC`/`anon`/`authenticated`, granting table CRUD
-  to `service_role`, and the final catalog validation block.
+## Application and configuration review
 
-I found no `DROP`, `TRUNCATE`, `DELETE`, or corpus-row `UPDATE` statement. The
-composite foreign key pairs the managed row's `source_id` with its `doc_id`.
-The SQL places index creation before table creation, so it must be run in the
-single transaction requested, allowing both DDL and grants to roll back on any
-error. No obvious destructive statement or out-of-scope table change was found
-in the source review. This is not a PostgreSQL syntax check: without a database
-connection I cannot confirm PostgreSQL 17.11 parses and executes the full block
-or that its catalog checks match the live schema.
+The local application provides `GET /library` and admin-protected
+`/api/documents` list, inspect, upload, replace, and delete routes. The API
+rejects an `ADMIN_TOKEN` shorter than 32 characters and uses
+`hmac.compare_digest`; the browser keeps the token in page memory rather than
+local storage. Local automated tests exercise the routes and management logic,
+but no live Render request was made. There is no Render connector in this
+session, so the presence and length of the live token could not be verified.
 
-| Required check | Result |
-|---|---|
-| Connected project is exactly `nldnpqhqrfwjgxcqeuru` | **Not checked — connector unavailable** |
-| Existing counts and schema objects match | **Not checked — owner-reported figures only** |
-| No conflicting live migration or unexpected schema object | **Not checked live** |
-| Backup, restore procedure, and available storage | **Not checked** |
-| `managed_uploads` absent/empty | **Not checked live** |
-| Migration applied atomically | **No — not applied** |
-| After-counts, RLS, grants, foreign keys, and search objects | **Not checked live** |
+The Frankfurt Blueprint previously hardcoded
+`INVESTIGATION_DAILY_BUDGET=0`, which would disable investigations and risk
+overwriting the operator's positive value. The Blueprint now declares that
+setting as `sync: false`, like `DATABASE_URL`, `GEMINI_API_KEY`, and
+`ADMIN_TOKEN`. This leaves those values for the Dashboard: on Blueprint updates
+Render ignores `sync: false` variables, preserving manually configured values;
+on initial Blueprint creation the operator must provide them. This changes no
+live Render setting. A regression test protects the manual budget/secret
+configuration.
 
-The activation gate therefore remains **BLOCKED**. No after-count is inferred.
+Render has not been deployed. On the Frankfurt service, verify the positive
+investigation budget is present, do not replace `DATABASE_URL` or
+`GEMINI_API_KEY`, and ensure `ADMIN_TOKEN` is a server-side secret of at least
+32 characters without displaying or logging it. The owner must perform this
+check in Render.
 
-## How to unblock
+## Manual Render deployment
 
-Enable a Supabase database connector for this workspace that can read the
-project identity/schema/counts and apply one explicit SQL migration to the
-Frankfurt project. Then rerun the fresh preflight, compare against the exact
-expected counts, verify backup/restore and storage headroom, and abort on any
-unexpected object or result. The prior user approval remains conditional on
-those gates. Do not use a Cloudflare D1 connector or an unverified local DSN as
-a substitute.
-
-The owner accepted that isolated PostgreSQL testing was unavailable; I did not
-start another Docker setup milestone. If the Supabase connector becomes
-available, the production migration itself still must run in one transaction
-with reasonable lock and statement timeouts. Any SQL error must roll back the
-transaction, be reported verbatim after secret scrubbing, and stop the run;
-do not retry blindly.
-
-## Render handoff (not deployed)
-
-The application commit containing Phase 6B is
-`bf1e9c636a6fda2db53496e6e9e27e64a584bdb2`. The current later commit
-`77eb2d4729903991944f197be2d384084de008a1` is documentation-only. Render access
-is unavailable, so no live environment variable or `ADMIN_TOKEN` check was
-possible. The token value was not read or printed in this turn.
-
-From `render.frankfurt.yaml`:
+Use the Frankfurt service `evidence-ai-frankfurt` from
+`render.frankfurt.yaml`. Confirm its region is Frankfurt and auto-deploy is
+off. After this documentation/configuration commit is pushed, use its exact SHA
+from the delivery message in **Deploys → Manual Deploy → Deploy a specific
+commit**. Do not sync Blueprint settings until the Dashboard confirms the
+positive `INVESTIGATION_DAILY_BUDGET` and existing secrets are preserved. For a
+new Blueprint, set a positive budget and enter the secrets as masked values.
 
 ```text
 Build: pip install -r requirements.txt && python scripts/download_model.py
 Start: uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers
-Health: /health
-Service: evidence-ai-frankfurt, Frankfurt region, free plan
+Health check: /health
 ```
 
-Variable names declared by that Blueprint are `PYTHON_VERSION`,
-`ENABLE_EMBEDDING_STARTUP_CHECK`, `FASTEMBED_MODEL`, `GEMINI_MODEL`,
-`INVESTIGATION_DAILY_BUDGET`, `INVESTIGATION_PER_IP_PER_MINUTE`,
-`INVESTIGATION_MAX_CONCURRENT`, `INVESTIGATION_TIMEOUT_SECONDS`,
-`GEMINI_REQUEST_TIMEOUT_SECONDS`, `GEMINI_MAX_OUTPUT_TOKENS`,
-`DATABASE_STATEMENT_TIMEOUT_MS`, `INDEXED_DOCUMENT_COUNT`, `DATABASE_URL`,
-`GEMINI_API_KEY`, and `ADMIN_TOKEN`. Render provides `PORT`.
+Keep these environment variable names configured:
+`PYTHON_VERSION`, `ENABLE_EMBEDDING_STARTUP_CHECK`, `FASTEMBED_MODEL`,
+`GEMINI_MODEL`, `INVESTIGATION_DAILY_BUDGET`,
+`INVESTIGATION_PER_IP_PER_MINUTE`, `INVESTIGATION_MAX_CONCURRENT`,
+`INVESTIGATION_TIMEOUT_SECONDS`, `GEMINI_REQUEST_TIMEOUT_SECONDS`,
+`GEMINI_MAX_OUTPUT_TOKENS`, `DATABASE_STATEMENT_TIMEOUT_MS`,
+`INDEXED_DOCUMENT_COUNT`, `DATABASE_URL`, `GEMINI_API_KEY`, and `ADMIN_TOKEN`.
+Render supplies `PORT`. Do not change the existing database URL, Gemini key,
+or positive daily investigation budget.
 
-**Do not sync the Blueprint unchanged:** it declares
-`INVESTIGATION_DAILY_BUDGET=0`, which disables investigations and could replace
-the operator's positive production setting. Preserve the positive budget,
-`GEMINI_API_KEY`, and `DATABASE_URL`. `ADMIN_TOKEN` is configured manually in
-Render; check that it is at least 32 characters without logging or exposing it.
-The app code enforces this minimum for admin operations, but live Render
-configuration was not accessible here.
+After deployment, inspect build logs for the offline model cache check, verify
+`GET /health` returns 200, then run the smoke test below. Render supports
+manual deployment of a specific commit; see [Render deployment
+documentation](https://render.com/docs/deploys). Render documents that
+`sync: false` values are ignored on later Blueprint updates, preserving the
+Dashboard value; see [Blueprint environment variables](https://render.com/docs/blueprint-spec#environment-variables).
 
 ## Minimal post-deployment TXT smoke test
 
-Run only after the database gates and migration succeed and the operator
-manually deploys the Frankfurt service:
+Use only a newly created, unique synthetic TXT document:
 
-1. Open `https://<Frankfurt-service-host>/library`.
-2. Enter the administrator token in the page's auth control; never put it in a
-   URL or browser local storage.
-3. Upload one small TXT file with a unique fact and record its upload ID and
+1. Open `/health` and confirm HTTP 200; open `/library`.
+2. Authenticate with the admin token in the page. Do not put it in a URL or
+   browser local storage.
+3. Upload a small TXT file containing a unique fact; record its upload ID and
    content-addressed document ID.
-4. Search/investigate a question whose answer is in that file; verify its title,
-   chunk citation, and exact quote.
-5. Replace the file with different unique text. Confirm the document ID changes
-   and the new fact can be retrieved.
-6. Delete only the recorded synthetic upload ID. Confirm the upload disappears
-   and its test content is no longer retrieved.
-7. Compare final documents/sources/chunks counts with the verified baseline
-   (50,000 / 50,018 / 50,000); confirm no managed test row remains and the
-   original corpus records remain intact.
-8. In Render Metrics, inspect memory during the upload and compare peak usage
-   with 512 MiB (`536870912` bytes). Startup logs provide
-   `application_startup_memory`; request logs currently provide
-   `investigation_memory` RSS, but there is no per-upload RSS event. Use the
-   Render memory graph for the upload interval.
+4. Ask an investigation question answered by that file. Confirm retrieval
+   returns the document and the citation quote matches the text exactly.
+5. Replace the file with different unique text. Confirm its content-addressed
+   document ID changes and the new fact is retrievable.
+6. Delete only the recorded synthetic upload. Confirm it is absent from the
+   library and its test fact is no longer retrieved.
+7. Confirm the test upload left no `managed_uploads` record and that the
+   original corpus counts remain 50,000 / 50,018 / 50,000. Do not modify any
+   original corpus document.
+8. In Render Metrics, inspect peak memory during the upload and compare it to
+   512 MiB (`536870912` bytes). The app logs startup RSS and investigation RSS,
+   but do not infer upload RSS from those logs; use the Render memory graph for
+   the upload interval.
 
-Stop on any unexpected result. Do not use a corpus record for update/delete or
-run broad cleanup.
+Stop on any unexpected result. Do not run cleanup against corpus data.
 
-## Verification performed
+## Local verification and remaining limits
 
-The full local suite was rerun:
+The full local suite was run with:
 
 ```powershell
 .\.venv\Scripts\python -m pytest -q
 ```
 
-Result: **192 passed**. These are local tests and do not verify live PostgreSQL,
-Render secrets, production counts, migration execution, or live CRUD. The final
-production migration status remains **not applied**; all live checks above are
-unverified. Do not begin Phase 7.
+Result: **194 passed in 2.98s**. Local tests are not production verification.
+Still unverified by Codex: the operator-reported
+Supabase migration results, live Render region and environment values, live
+admin-token length, application startup against the migrated schema,
+upload/retrieval CRUD, and Render memory under upload load. Do not begin Phase 7
+until the operator smoke test is complete.

@@ -20,7 +20,7 @@ services:
       - key: GEMINI_MODEL
         value: gemini-3.5-flash-lite
       - key: INVESTIGATION_DAILY_BUDGET
-        value: "0"
+        sync: false
       - key: INVESTIGATION_PER_IP_PER_MINUTE
         value: "2"
       - key: INVESTIGATION_MAX_CONCURRENT
