@@ -243,3 +243,16 @@ Local planning and personal preparation notes are excluded from the repository.
   conditional activation remains blocked pending a disposable local database.
 - The full local test suite passed 192 tests; this is not PostgreSQL or
   production verification.
+
+## Phase 6B final activation attempt — 2026-10-25
+
+- Codex assistance was used to statically review the complete proposed
+  migration, inspect the available tool catalog, update the activation report
+  and README, and rerun the local test suite.
+- No Supabase database connector was available in this session. The migration
+  was not applied, and no production database or Render setting was accessed.
+  The owner-provided Frankfurt counts were not independently verified. The
+  activation is blocked until a connected Supabase tool is available to run
+  the required preflight.
+- The full local suite passed 192 tests; this is not live PostgreSQL or
+  production verification.
