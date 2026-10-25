@@ -234,6 +234,134 @@ def test_replacement_uses_new_content_id_and_removes_unreferenced_old_content(mo
     assert replaced["source_sentences"] == []
 
 
+def test_upload_replace_is_immediately_semantically_retrievable_with_exact_citation(monkeypatch):
+    import app.retrieval.semantic as semantic
+    import app.retrieval.keyword as keyword
+    from app.reasoning.citations import validate_final_response
+    from app.retrieval.engine import search
+
+    db = MemoryDatabase()
+    _save_service_db(monkeypatch, db)
+
+    class SearchEmbeddingModel(FakeEmbeddingModel):
+        def query_embed(self, _queries):
+            return [[0.0] * 384]
+
+    model = SearchEmbeddingModel()
+
+    def materialize_chunk(chunk, *, with_validation):
+        doc = db.documents[chunk["doc_id"]]
+        full_text = doc["full_text"]
+        sources = [source for source in db.sources.values()
+                   if source["doc_id"] == chunk["doc_id"]]
+        hit = {
+            "chunk_id": chunk["chunk_id"], "doc_id": chunk["doc_id"],
+            "chunk_position": chunk["chunk_position"], "chunk_text": full_text[
+                chunk["start_char"]:chunk["end_char"]
+            ], "metadata": doc["metadata"], "sources": sources,
+            "cosine_distance": 0.2,
+        }
+        if with_validation:
+            hit["validation_source"] = {
+                "full_text": full_text, "start_char": chunk["start_char"],
+                "end_char": chunk["end_char"],
+            }
+        return hit
+
+    def fake_semantic(_conn, _vector, *, limit, include_validation_source=False,
+                      exact_title_aliases=None, **_kwargs):
+        # Model the observed miss from broad ANN search, then exact-title rescue.
+        if exact_title_aliases is None:
+            return []
+        matches = []
+        for chunk in db.chunks.values():
+            titles = [source["title_normalized"] for source in db.sources.values()
+                      if source["doc_id"] == chunk["doc_id"]]
+            if set(titles).intersection(exact_title_aliases):
+                matches.append(materialize_chunk(
+                    chunk, with_validation=include_validation_source,
+                ))
+        return matches[:limit]
+
+    def fake_keyword(_conn, query, *, limit, include_validation_source=False, **_kwargs):
+        terms = {term.strip(".,?!;:").casefold() for term in query.split()}
+        matches = []
+        for chunk in db.chunks.values():
+            hit = materialize_chunk(chunk, with_validation=include_validation_source)
+            body_terms = set(hit["chunk_text"].casefold().split())
+            if terms & body_terms:
+                hit["keyword_score"] = 1.0
+                matches.append(hit)
+        return matches[:limit]
+
+    monkeypatch.setattr(semantic, "semantic_search_chunks", fake_semantic)
+    monkeypatch.setattr(keyword, "keyword_search_chunks", fake_keyword)
+    title = "evidenceai_live_smoke_test"
+    old_text = "The cobalt lighthouse stores 37 copper keys."
+    new_text = "The cobalt lighthouse now stores 52 silver keys."
+    created = create_upload(
+        filename=f"{title}.txt", content=old_text.encode(), title=title,
+        chunking_strategy="paragraph", model=model,
+    )
+    upload_id = UUID(created["upload_id"])
+    old_doc_id = created["doc_id"]
+    old_chunk_ids = {key for key, row in db.chunks.items() if row["doc_id"] == old_doc_id}
+    initial = search(
+        db, "how many copper keys does the cobalt lighthouse store?",
+        mode="semantic", limit=3, candidate_limit=3, model=model,
+        semantic_reference_query=f"According to {title}, how many copper keys?",
+        include_evidence_text=True, include_validation_source=True,
+    )
+    assert initial and "37 copper keys" in initial[0]["evidence_text"]
+
+    replacement = replace_upload(
+        upload_id=upload_id, filename=f"{title}_updated.txt", content=new_text.encode(),
+        title=title, chunking_strategy="paragraph", model=model,
+    )
+    assert replacement["title"] == title
+    assert replacement["doc_id"] != old_doc_id
+    assert old_doc_id not in db.documents
+    assert old_chunk_ids.isdisjoint(db.chunks)
+
+    question = (
+        "According to evidenceai_live_smoke_test, how many silver keys "
+        "does the cobalt lighthouse now store?"
+    )
+    semantic_results = search(
+        db, "how many silver keys does the cobalt lighthouse now store?",
+        mode="semantic", limit=3, candidate_limit=3, model=model,
+        semantic_reference_query=question, include_evidence_text=True,
+        include_validation_source=True,
+    )
+    keyword_results = search(
+        db, question, mode="keyword", limit=3, candidate_limit=3,
+        include_evidence_text=True, include_validation_source=True,
+    )
+    assert semantic_results and semantic_results[0]["doc_id"] == replacement["doc_id"]
+    assert keyword_results and keyword_results[0]["doc_id"] == replacement["doc_id"]
+    assert "52 silver keys" in semantic_results[0]["evidence_text"]
+    assert "37 copper keys" not in semantic_results[0]["evidence_text"]
+
+    evidence = {
+        hit["chunk_id"]: {
+            "doc_id": hit["doc_id"], "title": hit["title"],
+            "titles": hit["titles"], "sources": hit["sources"],
+            "evidence_text": hit["evidence_text"],
+            "validation_source": hit["validation_source"],
+        }
+        for hit in semantic_results
+    }
+    verified = validate_final_response({
+        "central_claim_id": "c1",
+        "claims": [{"claim_id": "c1", "text": "It stores 52 silver keys.",
+                    "citations": [{"chunk_id": semantic_results[0]["chunk_id"],
+                                   "quote": "now stores 52 silver keys"}]}],
+        "conflict_groups": [],
+    }, evidence)
+    assert verified["status"] == "answered"
+    assert verified["claims"][0]["citations"][0]["quote"] == "now stores 52 silver keys"
+
+
 def test_stale_same_content_replacement_is_rejected_by_monotonic_version(monkeypatch):
     import app.ingestion.managed_documents as service
 

@@ -169,6 +169,143 @@ def test_semantic_sql_uses_halfvec_and_reconstructs_chunk_text_from_offsets():
     assert conn.params[1] == 5
 
 
+def test_semantic_exact_title_sql_is_bound_and_scoped_before_vector_sorting():
+    class Result:
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def execute(self, statement, params):
+            self.statement, self.params = str(statement), params
+            return Result()
+
+    conn = Connection()
+    semantic_search_chunks(
+        conn, [0.0] * 384, limit=3,
+        filters={"source_split": "managed_upload"},
+        exact_title_aliases=["evidenceai_live_smoke_test"],
+    )
+    assert "title_normalized = ANY(%s)" in conn.statement
+    assert "exact_title_docs AS MATERIALIZED" in conn.statement
+    assert "matching_chunks AS MATERIALIZED" in conn.statement
+    assert "LIMIT 26" in conn.statement and "<= 25" in conn.statement
+    assert "ORDER BY c.embedding OPERATOR(extensions.<=>) q.embedding" in conn.statement
+    assert conn.params[1:] == (["evidenceai_live_smoke_test"], "managed_upload", 3)
+    assert "evidenceai_live_smoke_test" not in conn.statement
+
+
+def test_semantic_exact_title_sql_rejects_unbounded_alias_lists():
+    with pytest.raises(ValueError, match="at most three"):
+        semantic_search_chunks(
+            object(), [0.0] * 384, exact_title_aliases=["one", "two", "three", "four"],
+        )
+
+
+def test_exact_title_references_extract_identifiers_and_quoted_names_only():
+    from app.retrieval.semantic import exact_title_references
+
+    question = "According to evidenceai_live_smoke_test, how many silver keys are there?"
+    assert exact_title_references(question) == ["evidenceai_live_smoke_test"]
+    assert exact_title_references('What did "Cyma Watches" report?') == ["cyma watches"]
+    assert exact_title_references("How many silver keys are stored?") == []
+
+
+def test_semantic_search_uses_original_question_for_bounded_title_rescue(monkeypatch):
+    import app.retrieval.semantic as semantic
+
+    class EmbeddingModel:
+        def query_embed(self, _queries):
+            return [[0.0] * 384]
+
+    broad_hit = _hit("broad", "corpus-doc", 0.0, titles=("Unrelated corpus page",))
+    replacement_hit = _hit(
+        "replacement", "managed-doc", 0.0, titles=("evidenceai_live_smoke_test",),
+    )
+    broad_hit["cosine_distance"] = 0.4
+    replacement_hit["cosine_distance"] = 0.2
+    calls = []
+
+    def fake_search(_conn, _vector, *, exact_title_aliases=None, **_kwargs):
+        calls.append(exact_title_aliases)
+        return [replacement_hit] if exact_title_aliases else [broad_hit]
+
+    monkeypatch.setattr(semantic, "semantic_search_chunks", fake_search)
+    diagnostics = {}
+    results = search(
+        object(), "how many silver keys does the lighthouse store?",
+        mode="semantic", limit=2, candidate_limit=2, model=EmbeddingModel(),
+        semantic_reference_query=(
+            "According to evidenceai_live_smoke_test, how many silver keys "
+            "does the cobalt lighthouse now store?"
+        ),
+        diagnostics=diagnostics,
+    )
+    assert calls == [None, ["evidenceai_live_smoke_test"]]
+    assert [hit["chunk_id"] for hit in results] == ["replacement", "broad"]
+    assert diagnostics == {
+        "semantic_title_reference_count": 1,
+        "semantic_title_already_retrieved": False,
+        "semantic_title_fallback_attempted": True,
+        "semantic_title_fallback_result_count": 1,
+        "semantic_title_fallback_added_count": 1,
+        "semantic_title_fallback_used": True,
+    }
+
+
+def test_semantic_search_preserves_regular_corpus_results_without_exact_title(monkeypatch):
+    import app.retrieval.semantic as semantic
+
+    class EmbeddingModel:
+        def query_embed(self, _queries):
+            return [[0.0] * 384]
+
+    corpus_hit = _hit("corpus", "corpus-doc", 0.0, titles=("Existing corpus page",))
+    corpus_hit["cosine_distance"] = 0.2
+    calls = []
+
+    def fake_search(_conn, _vector, *, exact_title_aliases=None, **_kwargs):
+        calls.append(exact_title_aliases)
+        return [corpus_hit]
+
+    monkeypatch.setattr(semantic, "semantic_search_chunks", fake_search)
+    diagnostics = {}
+    results = search(
+        object(), "Which systems changed the payment retry policy?", mode="semantic",
+        limit=1, candidate_limit=1, model=EmbeddingModel(), diagnostics=diagnostics,
+    )
+    assert [hit["chunk_id"] for hit in results] == ["corpus"]
+    assert calls == [None]
+    assert diagnostics["semantic_title_fallback_attempted"] is False
+
+
+def test_semantic_search_skips_title_rescue_when_named_corpus_title_is_already_ranked(monkeypatch):
+    import app.retrieval.semantic as semantic
+
+    class EmbeddingModel:
+        def query_embed(self, _queries):
+            return [[0.0] * 384]
+
+    title_hit = _hit("named-corpus", "corpus-doc", 0.0,
+                     titles=("evidenceai_live_smoke_test",))
+    title_hit["cosine_distance"] = 0.1
+    calls = []
+
+    def fake_search(_conn, _vector, *, exact_title_aliases=None, **_kwargs):
+        calls.append(exact_title_aliases)
+        return [title_hit]
+
+    monkeypatch.setattr(semantic, "semantic_search_chunks", fake_search)
+    diagnostics = {}
+    results = search(
+        object(), "silver keys in evidenceai_live_smoke_test?", mode="semantic",
+        limit=1, candidate_limit=1, model=EmbeddingModel(), diagnostics=diagnostics,
+    )
+    assert [hit["chunk_id"] for hit in results] == ["named-corpus"]
+    assert calls == [None]
+    assert diagnostics["semantic_title_already_retrieved"] is True
+    assert diagnostics["semantic_title_fallback_attempted"] is False
+
+
 def test_citation_search_includes_canonical_text_and_offsets_only_when_requested():
     class Result:
         def fetchall(self):

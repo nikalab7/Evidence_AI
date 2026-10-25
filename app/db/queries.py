@@ -707,8 +707,14 @@ def semantic_search_chunks(
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
     include_validation_source: bool = False,
+    exact_title_aliases: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run pgvector cosine retrieval and include paragraph titles and provenance."""
+    """Run pgvector cosine retrieval, optionally scoped to exact title aliases.
+
+    The title-scoped path materializes a small, exact alias match before sorting
+    vectors. This prevents the global HNSW index from filtering out the only
+    chunks belonging to a newly uploaded or replaced document.
+    """
     if len(vector) != 384 or not all(math.isfinite(float(value)) for value in vector):
         raise ValueError("query embedding must contain 384 finite values")
     if not 1 <= limit <= 100:
@@ -716,6 +722,53 @@ def semantic_search_chunks(
     filter_sql, filter_values = _retrieval_filter_sql(filters)
     validation_fields = sql.SQL(", d.full_text, c.start_char, c.end_char") if include_validation_source else sql.SQL("")
     literal = "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
+    if exact_title_aliases:
+        if len(exact_title_aliases) > 3 or any(
+            not isinstance(title, str) or not title.strip() for title in exact_title_aliases
+        ):
+            raise ValueError("at most three non-empty exact title aliases are supported")
+        statement = sql.SQL(
+            """WITH query_vector AS (
+                   SELECT %s::extensions.halfvec(384) AS embedding
+               ), exact_title_docs AS MATERIALIZED (
+                   SELECT DISTINCT doc_id
+                   FROM public.document_sources
+                   WHERE title_normalized = ANY(%s)
+                   ORDER BY doc_id
+                   LIMIT 26
+               ), matching_chunks AS MATERIALIZED (
+                   SELECT c.chunk_id, c.doc_id, c.chunk_position, c.embedding,
+                          c.start_char, c.end_char, c.tsv
+                   FROM public.chunks c
+                   JOIN exact_title_docs titled ON titled.doc_id = c.doc_id
+                   WHERE (SELECT count(*) FROM exact_title_docs) <= 25
+                     AND {}
+               )
+               SELECT c.chunk_id, c.doc_id, c.chunk_position,
+                      substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char),
+                      d.metadata, COALESCE(p.sources, '[]'::jsonb) AS sources,
+                      c.embedding OPERATOR(extensions.<=>) q.embedding AS cosine_distance{}
+               FROM matching_chunks c
+               JOIN public.documents d ON d.doc_id = c.doc_id
+               CROSS JOIN query_vector q
+               LEFT JOIN LATERAL (
+                   SELECT jsonb_agg(jsonb_build_object(
+                              'source_id', s.source_id,
+                              'title_alias', s.title_alias,
+                              'source_url', s.source_url,
+                              'source_revision', s.source_revision,
+                              'source_split', s.source_split
+                          ) ORDER BY s.title_normalized, s.source_id) AS sources
+                   FROM public.document_sources s WHERE s.doc_id = c.doc_id
+               ) p ON TRUE
+               ORDER BY c.embedding OPERATOR(extensions.<=>) q.embedding, c.chunk_id
+               LIMIT %s"""
+        ).format(filter_sql, validation_fields)
+        rows = conn.execute(
+            statement, (literal, list(exact_title_aliases), *filter_values, limit),
+        ).fetchall()
+        return _search_result_rows(rows, "cosine_distance")
+
     statement = sql.SQL(
         """WITH query_vector AS (
                SELECT %s::extensions.halfvec(384) AS embedding

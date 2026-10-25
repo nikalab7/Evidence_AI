@@ -104,6 +104,7 @@ def investigate(
                     conn, embedding_model, function.name, safe_args,
                     retrieved=retrieved, filters=filters,
                     retrieval_mode=retrieval_mode,
+                    original_question=question,
                     database_statement_timeout_ms=database_statement_timeout_ms,
                 )
                 outcome = "error" if "error" in result else "ok"
@@ -116,14 +117,12 @@ def investigate(
                           "error_type": type(exc).__name__}
             tool_calls += 1
             timing.update({"step": tool_calls, "outcome": outcome})
-            timing["arguments"] = trace_arguments(function.name, safe_args)
+            timing["arguments"] = trace_arguments(
+                function.name, safe_args, original_question=question,
+            )
             if function.name == "search_evidence":
                 hits = result.get("results", []) if isinstance(result, dict) else []
-                timing["result_chunk_ids"] = [hit.get("chunk_id") for hit in hits if isinstance(hit, dict)]
-                timing["result_titles"] = sorted({
-                    title for hit in hits if isinstance(hit, dict)
-                    for title in hit.get("titles", []) if isinstance(title, str)
-                })
+                timing.setdefault("retrieved_chunk_count", len(hits))
             elif function.name == "get_document" and isinstance(result, dict):
                 timing["document_characters"] = len(result.get("full_text", ""))
             trace["tool_calls"].append(timing)
@@ -182,4 +181,35 @@ def investigate(
     trace["validated_citations"] = sum(len(claim["citations"]) for claim in verified["claims"])
     trace["verified_claims"] = len(verified["claims"])
     trace["dropped_claims"] = len(verified["dropped_claim_ids"])
+    draft_claims = final_draft.get("claims") if isinstance(final_draft, Mapping) else None
+    claim_items = draft_claims if isinstance(draft_claims, list) else []
+    if generation_error is not None:
+        diagnostic = "generation_failed"
+    elif not retrieved:
+        diagnostic = "evidence_not_retrieved"
+    elif final_draft is None:
+        diagnostic = "final_response_unavailable"
+    elif not claim_items:
+        if (final_draft.get("claims") == []
+                and final_draft.get("central_claim_id") in ("", None)):
+            diagnostic = "model_abstained"
+        else:
+            diagnostic = "invalid_final_response"
+    elif not any(isinstance(item, Mapping) and item.get("citations") for item in claim_items):
+        diagnostic = "evidence_retrieved_but_not_cited"
+    elif verified["dropped_claim_ids"]:
+        diagnostic = "citation_rejected"
+    elif verified["central_claim_id"] not in {
+        claim["claim_id"] for claim in verified["claims"]
+    }:
+        diagnostic = "central_claim_unverified"
+    else:
+        diagnostic = "citations_verified"
+    trace["evidence_diagnostic"] = {
+        "outcome": diagnostic,
+        "retrieved_chunk_count": len(retrieved),
+        "draft_claim_count": len(claim_items),
+        "verified_claim_count": len(verified["claims"]),
+        "rejected_claim_count": len(verified["dropped_claim_ids"]),
+    }
     return finish(verified, trace, started, model_name)

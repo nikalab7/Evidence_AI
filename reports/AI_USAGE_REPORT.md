@@ -270,3 +270,28 @@ Local planning and personal preparation notes are excluded from the repository.
   deployment or live CRUD test was performed.
 - The complete local suite passed 194 tests. This does not verify production
   migration state, Render secrets, or upload memory.
+
+## Managed-document semantic replacement diagnosis - 2026-10-25
+
+- Codex assistance was used to inspect semantic ranking, Gemini tool-query
+  rewriting, HNSW behavior, filters, upload replacement, and exact-quote
+  validation. A bounded exact-title semantic rescue now uses the original
+  question when needed; safe operational diagnostics distinguish retrieval
+  misses, abstentions, missing/rejected citations, and verified citations.
+- A read-only query confirmed the Frankfurt synthetic replacement metadata and
+  three chunks. One real Gemini tool-planning request and one local full
+  investigation were made for the user-provided synthetic question. The local
+  run answered with a verified quote. One public Frankfurt API request still
+  returned HTTP 200 with `insufficient`; no trace was exposed by that deployed
+  version, so the historical Render failure stage is not yet confirmed.
+- A read-only before/after comparison used only the 200-question retrieval dev
+  set. Recall@5 changed from 0.8425 to 0.8700, Recall@10 from 0.8775 to 0.9050,
+  and MRR from 0.928266 to 0.936599. Two individual questions regressed in MRR.
+  The 40 held-out candidates were not opened. A fresh broad evidence-coverage
+  query timed out without changing data; eligibility used the previously
+  recorded all-200-dev evidence gate.
+- Automated tests exercise upload/replacement retrieval, exact citations,
+  diagnostic categories, private-data-safe logs, and unchanged retrieval when
+  title rescue is unnecessary. The full local suite passed 206 tests. The
+  corrected code has not been deployed; the operator must deploy the pushed
+  commit and inspect its sanitized `investigation_diagnostic` log event.

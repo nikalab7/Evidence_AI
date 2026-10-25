@@ -47,11 +47,24 @@ before the next Gemini HTTP request. The connection closes after the
 investigation. This avoids sharing a psycopg connection concurrently and
 prevents idle open transactions during model calls.
 
+Semantic retrieval embeds Gemini's focused search query. When that query or
+the original user question contains a high-confidence exact title or identifier
+and no matching title alias appears in the semantic results, the retriever runs
+a bounded title-scoped semantic rescue. It considers at most three exact alias
+references, refuses aliases matching more than 25 documents, and returns at
+most three chunks ranked by cosine distance within the materialized candidates.
+This avoids widening every query or relying on a global ANN shortlist to find a
+newly uploaded document. If normal semantic results already contain the exact
+title, their original order is preserved and no extra query runs.
+
 The existing agent remains bounded at four investigation steps and five actual
 Gemini HTTP attempts, including retries. Every request has a configurable
 timeout and output-token cap. The API maps upstream/database failures to
-generic public errors and logs only sanitized error types. Internal traces,
-questions, API keys, and database URLs are not returned to the browser.
+generic public errors. Internal traces and diagnostic logs distinguish a
+retrieval miss, model abstention, missing citations, rejected citations, and
+verified citations using counts and status codes only; questions, document
+titles/text, chunk IDs, API keys, and database URLs are not included in those
+logs or public responses.
 
 The existing two-level citation validator verifies that each cited chunk was
 retrieved and that its quote is present verbatim after whitespace

@@ -163,6 +163,46 @@ def _get_limiter(request: Request, settings: Settings) -> InvestigationLimiter:
     return limiter
 
 
+def _safe_diagnostic_log(trace: Any, status: str, retrieval_mode: str) -> dict[str, Any]:
+    """Select operational counters only; exclude questions, titles, IDs, and quotes."""
+    trace = trace if isinstance(trace, dict) else {}
+    evidence = trace.get("evidence_diagnostic")
+    evidence = evidence if isinstance(evidence, dict) else {}
+    safe_tool_fields = (
+        "step", "tool", "outcome", "total_seconds", "retrieved_chunk_count",
+        "semantic_title_reference_count", "semantic_title_already_retrieved",
+        "semantic_title_fallback_attempted",
+        "semantic_title_fallback_result_count", "semantic_title_fallback_added_count",
+        "semantic_title_fallback_used",
+    )
+    calls = []
+    raw_calls = trace.get("tool_calls")
+    for call in (raw_calls if isinstance(raw_calls, list) else []):
+        if isinstance(call, dict):
+            selected = {key: call[key] for key in safe_tool_fields if key in call}
+            if "tool" in selected and selected["tool"] not in {"search_evidence", "get_document"}:
+                selected["tool"] = "unknown"
+            if selected.get("outcome") not in {"ok", "error"}:
+                selected["outcome"] = "error"
+            arguments = call.get("arguments")
+            if isinstance(arguments, dict) and "query_matches_user_question" in arguments:
+                selected["query_matches_user_question"] = arguments[
+                    "query_matches_user_question"
+                ]
+            calls.append(selected)
+    return {
+        "event": "investigation_diagnostic",
+        "status": status,
+        "retrieval_mode": retrieval_mode,
+        "elapsed_seconds": trace.get("total_investigation_seconds"),
+        "evidence_outcome": evidence.get("outcome"),
+        "retrieved_chunk_count": evidence.get("retrieved_chunk_count", 0),
+        "verified_claim_count": evidence.get("verified_claim_count", 0),
+        "rejected_claim_count": evidence.get("rejected_claim_count", 0),
+        "tool_calls": calls,
+    }
+
+
 @router.post("/investigate")
 async def investigate_endpoint(
     payload: InvestigationRequest,
@@ -215,6 +255,9 @@ async def investigate_endpoint(
             )
         public_result = _public_result(result)
         outcome = public_result["status"]
+        logger.info("investigation_diagnostic %s", json.dumps(
+            _safe_diagnostic_log(trace, outcome, payload.retrieval_mode), sort_keys=True,
+        ))
         return public_result
     except InvestigationTimeout:
         raise HTTPException(status_code=504, detail="The investigation timed out. Please try again.") from None

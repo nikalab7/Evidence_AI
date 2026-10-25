@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from app.llm.agent import investigate
 from app.llm.schemas import FunctionCall, LLMResponse
 
@@ -30,7 +32,13 @@ def _search_hit():
 def test_search_tool_answer_is_citation_checked_and_latency_is_reported(monkeypatch):
     import app.llm.tools as tools
 
-    monkeypatch.setattr(tools, "search", lambda *_args, **_kwargs: [_search_hit()])
+    search_kwargs = []
+
+    def fake_search(*_args, **kwargs):
+        search_kwargs.append(kwargs)
+        return [_search_hit()]
+
+    monkeypatch.setattr(tools, "search", fake_search)
     draft = {"central_claim_id": "c1", "claims": [{"claim_id": "c1",
         "text": "A change delayed payment processing.", "citations": [{"chunk_id": "chunk-1",
         "quote": "A change delayed payment processing by 12 minutes."}]}], "conflict_groups": []}
@@ -45,8 +53,53 @@ def test_search_tool_answer_is_citation_checked_and_latency_is_reported(monkeypa
     assert result.status == "answered"
     assert result.claims[0]["citations"][0]["sources"][0]["source_id"] == "src-1"
     assert result.trace["tool_calls"][0]["tool"] == "search_evidence"
+    assert search_kwargs[0]["semantic_reference_query"] == "Why was payment processing delayed?"
+    assert result.trace["tool_calls"][0]["arguments"]["query_matches_user_question"] is False
+    assert "query" not in result.trace["tool_calls"][0]["arguments"]
+    assert result.trace["evidence_diagnostic"]["outcome"] == "citations_verified"
     assert result.trace["api_usage"]["request_count"] == 3
     assert result.trace["api_usage"]["tokens"]["totalTokenCount"] == 9
+
+
+@pytest.mark.parametrize(
+    ("results", "draft", "expected"),
+    [
+        ([], {"central_claim_id": "", "claims": [], "conflict_groups": []},
+         "evidence_not_retrieved"),
+        ([_search_hit()], {"central_claim_id": "", "claims": [], "conflict_groups": []},
+         "model_abstained"),
+        ([_search_hit()], {"central_claim_id": "c1", "claims": [{
+            "claim_id": "c1", "text": "Unsupported wording.", "citations": [],
+        }], "conflict_groups": []}, "evidence_retrieved_but_not_cited"),
+        ([_search_hit()], {"central_claim_id": "c1", "claims": [{
+            "claim_id": "c1", "text": "Unsupported wording.", "citations": [{
+                "chunk_id": "chunk-1", "quote": "A fabricated quotation.",
+            }],
+        }], "conflict_groups": []}, "citation_rejected"),
+        ([_search_hit()], {"central_claim_id": "missing", "claims": [{
+            "claim_id": "c1", "text": "A verified claim.", "citations": [{
+                "chunk_id": "chunk-1",
+                "quote": "A change delayed payment processing by 12 minutes.",
+            }],
+        }], "conflict_groups": []}, "central_claim_unverified"),
+    ],
+)
+def test_evidence_diagnostics_distinguish_retrieval_abstention_and_quote_rejection(
+    monkeypatch, results, draft, expected,
+):
+    import app.llm.tools as tools
+
+    monkeypatch.setattr(tools, "search", lambda *_args, **_kwargs: results)
+    llm = ScriptedLLM([
+        LLMResponse(None, [FunctionCall("search_evidence", {"query": "focused query"})],
+                    {"parts": []}, _metric(0.01), {}),
+        LLMResponse("Ready to answer.", [], {"parts": []}, _metric(0.01), {}),
+        LLMResponse(json.dumps(draft), [], {"parts": []}, _metric(0.01), {}),
+    ])
+    result = investigate(
+        "A synthetic diagnostic question.", conn=object(), embedding_model=object(), llm_client=llm,
+    )
+    assert result.trace["evidence_diagnostic"]["outcome"] == expected
 
 
 def test_agent_stops_at_four_tool_steps_and_five_http_requests(monkeypatch):

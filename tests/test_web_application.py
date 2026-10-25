@@ -108,10 +108,11 @@ def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     assert web_client.get("/health").json() == {"status": "ok"}
 
 
-def test_http_investigation_runs_agent_and_returns_verified_citation(web_client, monkeypatch):
+def test_http_investigation_runs_agent_and_returns_verified_citation(web_client, monkeypatch, caplog):
     import app.llm.service as service
     import app.llm.tools as tools
 
+    caplog.set_level("INFO", logger="uvicorn.error")
     conn = FakeConnection()
     monkeypatch.setattr(service, "connect_database", lambda: conn)
     monkeypatch.setattr(service, "load_model", lambda *_args, **_kwargs: pytest.fail("startup model must be reused"))
@@ -146,6 +147,11 @@ def test_http_investigation_runs_agent_and_returns_verified_citation(web_client,
     assert body["conflict_groups"] == []
     assert modes == ["semantic"]
     assert len(client.calls) == 3
+    assert "investigation_diagnostic" in caplog.text
+    assert "query_matches_user_question" in caplog.text
+    assert "Why was payment delayed?" not in caplog.text
+    assert "A change delayed payment processing" not in caplog.text
+    assert "Incident Report" not in caplog.text
 
 
 def test_http_investigation_abstains_when_no_evidence_is_returned(web_client, monkeypatch):

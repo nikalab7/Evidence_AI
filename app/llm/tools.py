@@ -47,6 +47,7 @@ def execute_tool(
     conn: Any, embedding_model: Any, name: str, arguments: dict[str, Any], *,
     retrieved: dict[str, dict[str, Any]], filters: dict[str, str] | None = None,
     retrieval_mode: str = "semantic",
+    original_question: str | None = None,
     database_statement_timeout_ms: int = 12_000,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Execute only declared read tools and return result plus sanitized timings."""
@@ -61,11 +62,13 @@ def execute_tool(
             result, timing = _execute_tool(
                 conn, embedding_model, name, arguments, retrieved=retrieved,
                 filters=filters, retrieval_mode=retrieval_mode,
+                original_question=original_question,
             )
     else:
         result, timing = _execute_tool(
             conn, embedding_model, name, arguments, retrieved=retrieved,
             filters=filters, retrieval_mode=retrieval_mode,
+            original_question=original_question,
         )
     timing.update({"tool": name, "total_seconds": round(perf_counter() - started, 6)})
     return result, timing
@@ -74,11 +77,12 @@ def execute_tool(
 def _execute_tool(
     conn: Any, embedding_model: Any, name: str, arguments: dict[str, Any], *,
     retrieved: dict[str, dict[str, Any]], filters: dict[str, str] | None,
-    retrieval_mode: str,
+    retrieval_mode: str, original_question: str | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if name == "search_evidence":
         result, timing = _search(
             conn, embedding_model, arguments, retrieved, filters, retrieval_mode,
+            original_question,
         )
     elif name == "get_document":
         result, timing = _get_document(conn, arguments, retrieved)
@@ -89,6 +93,7 @@ def _execute_tool(
 
 def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dict[str, Any]],
             base_filters: dict[str, str] | None, retrieval_mode: str,
+            original_question: str | None,
             ) -> tuple[dict[str, Any], dict[str, Any]]:
     query, limit, filters = args.get("query"), args.get("k", DEFAULT_TOOL_K), args.get("filters", {})
     if not isinstance(query, str) or not query.strip() or len(query) > MAX_TOOL_QUERY_CHARS:
@@ -102,10 +107,12 @@ def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dic
     ):
         return {"error": "invalid_search_filters"}, {}
     timings: dict[str, float] = {}
+    diagnostics: dict[str, Any] = {}
     hits = search(
         conn, query, mode=retrieval_mode, limit=limit, candidate_limit=20, model=model,
         filters={**(base_filters or {}), **filters}, timings=timings,
         include_evidence_text=True, include_validation_source=True,
+        semantic_reference_query=original_question, diagnostics=diagnostics,
     )
     results = []
     for hit in hits:
@@ -123,7 +130,10 @@ def _search(conn: Any, model: Any, args: dict[str, Any], evidence: dict[str, dic
             "text": full_text[:MAX_PROMPT_CHUNK_CHARS],
             "text_truncated": len(full_text) > MAX_PROMPT_CHUNK_CHARS,
         })
-    return {"query": query, "results": results}, {key: round(value, 6) for key, value in timings.items()}
+    timing = {key: round(value, 6) for key, value in timings.items()}
+    timing.update(diagnostics)
+    timing["retrieved_chunk_count"] = len(results)
+    return {"results": results}, timing
 
 
 def _get_document(conn: Any, args: dict[str, Any], evidence: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:

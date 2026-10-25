@@ -70,6 +70,8 @@ def search(
     include_validation_source: bool = False,
     keyword_strategy: KeywordStrategy = "or",
     common_term_threshold: float = DEFAULT_COMMON_TERM_THRESHOLD,
+    semantic_reference_query: str | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve stable, provenance-aware chunk results with one ranked API."""
     if mode not in ("semantic", "keyword", "hybrid"):
@@ -97,6 +99,7 @@ def search(
         hits = retrieve_semantic(
             conn, model, query, limit=limit, filters=filters, timings=timings,
             include_validation_source=include_validation_source,
+            reference_query=semantic_reference_query, diagnostics=diagnostics,
         )
         if timings is not None:
             timings["retrieval_processing_seconds"] = perf_counter() - retrieval_started
@@ -122,6 +125,7 @@ def search(
     semantic_hits = retrieve_semantic(
         conn, model, query, limit=candidate_limit, filters=filters, timings=timings,
         include_validation_source=include_validation_source,
+        reference_query=semantic_reference_query, diagnostics=diagnostics,
     )
     keyword_hits = retrieve_keyword(
         conn, query, limit=candidate_limit, filters=filters, timings=timings,
