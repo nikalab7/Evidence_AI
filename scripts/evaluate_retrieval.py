@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -18,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.db.connection import connect_database
-from app.db.queries import read_indexed_source_evidence
+from app.db.queries import read_indexed_source_evidence_for_references
 from app.embedding_smoke import MODEL_NAME
 from app.evaluation.metrics import (
     aggregate_retrieval_metrics,
@@ -98,6 +99,10 @@ def _compact_hits(
 def run_evaluation(
     *,
     dev_path: Path = DEV_PATH,
+    question_rows: Sequence[Mapping[str, Any]] | None = None,
+    require_all_eligible: bool = False,
+    expected_indexed_documents: int | None = None,
+    dataset_sha256: str | None = None,
     top_k: int = TOP_K,
     candidate_k: int = CANDIDATE_K,
     semantic_weight: float = 1.0,
@@ -107,18 +112,37 @@ def run_evaluation(
 ) -> dict[str, Any]:
     if not 1 <= top_k <= candidate_k <= 100:
         raise ValueError("retrieval evaluation requires 1 <= top_k <= candidate_k <= 100")
-    questions = _read_questions(dev_path)
+    questions = ([dict(question) for question in question_rows]
+                 if question_rows is not None else _read_questions(dev_path))
     if not questions:
         raise ValueError("retrieval dev file contains no questions")
+    for question in questions:
+        if not isinstance(question.get("question_id"), str):
+            case_id = question.get("case_id")
+            if isinstance(case_id, str):
+                question["question_id"] = case_id
+            else:
+                raise ValueError("retrieval case requires question_id or case_id")
+    required_evidence = [
+        fact for question in questions for fact in question.get("supporting_evidence", [])
+    ]
 
     with connect_database(autocommit=True) as conn:
         conn.execute("SET statement_timeout = '30000'")
-        source_evidence = read_indexed_source_evidence(conn)
+        source_evidence = read_indexed_source_evidence_for_references(conn, required_evidence)
         indexed_documents = conn.execute("SELECT count(*) FROM public.documents").fetchone()[0]
+        if expected_indexed_documents is not None and indexed_documents != expected_indexed_documents:
+            raise RuntimeError(
+                f"expected {expected_indexed_documents} indexed documents, found {indexed_documents}"
+            )
         evidence_pairs = indexed_evidence_pairs(source_evidence)
         eligible, excluded = select_eligible_questions(questions, evidence_pairs)
         if not eligible:
             raise ValueError("no dev questions have complete supporting evidence in the indexed corpus")
+        if require_all_eligible and excluded:
+            raise RuntimeError(
+                f"indexed evidence is incomplete for {len(excluded)} of {len(questions)} requested questions"
+            )
 
         model = load_model(MODEL_NAME)
         results = {"semantic": {}, "keyword": {}, "hybrid": {}}
@@ -194,6 +218,7 @@ def run_evaluation(
 
     if details_json is not None:
         details = {
+            "dataset_sha256": dataset_sha256,
             "indexed_documents": indexed_documents,
             "dev_questions_total": len(questions),
             "eligible_questions": len(eligible),
@@ -231,7 +256,11 @@ def run_evaluation(
 
     return {
         "status": "passed",
-        "dataset": str(dev_path.relative_to(PROJECT_ROOT)) if dev_path.is_relative_to(PROJECT_ROOT) else str(dev_path),
+        "dataset": (
+            str(dev_path.relative_to(PROJECT_ROOT)) if dev_path.is_relative_to(PROJECT_ROOT)
+            else str(dev_path)
+        ) if question_rows is None else "provided_question_rows",
+        "dataset_sha256": dataset_sha256,
         "embedding_model": MODEL_NAME,
         "indexed_documents": indexed_documents,
         "indexed_provenance_rows": len({source["source_id"] for source in source_evidence}),
@@ -253,6 +282,10 @@ def run_evaluation(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dev", type=Path, default=DEV_PATH)
+    parser.add_argument(
+        "--answerable-only", action="store_true",
+        help="score only live answerable cases from a final evaluation JSONL",
+    )
     parser.add_argument("--top-k", type=int, default=TOP_K)
     parser.add_argument("--candidate-k", type=int, default=CANDIDATE_K)
     parser.add_argument("--semantic-weight", type=float, default=1.0)
@@ -264,8 +297,23 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
+        question_rows = None
+        dataset_sha256 = None
+        if args.answerable_only:
+            all_rows = _read_questions(args.dev)
+            dataset_sha256 = hashlib.sha256(args.dev.read_bytes()).hexdigest()
+            question_rows = [
+                {**row, "question_id": row.get("question_id") or row.get("case_id")}
+                for row in all_rows
+                if row.get("expected_status") == "answered"
+                and row.get("execution_mode", "live") == "live"
+            ]
+            if not question_rows:
+                raise ValueError("final evaluation file has no live answerable cases")
         report = run_evaluation(
-            dev_path=args.dev,
+            dev_path=args.dev, question_rows=question_rows,
+            require_all_eligible=args.answerable_only,
+            dataset_sha256=dataset_sha256,
             top_k=args.top_k,
             candidate_k=args.candidate_k,
             semantic_weight=args.semantic_weight,

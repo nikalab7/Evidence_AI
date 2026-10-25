@@ -473,7 +473,10 @@ def aggregate_results(
 
 def audit_plan(
     cases: list[dict[str, Any]], *, dataset_sha256: str, daily_budget: int,
+    comparison_plan: str = "economical",
 ) -> dict[str, Any]:
+    if comparison_plan not in {"economical", "full"}:
+        raise ValueError("comparison plan must be economical or full")
     if len(cases) != 45:
         raise ValueError("final answer dataset must contain exactly 45 planned cases")
     expected_counts = {"multi_hop": 25, "single_hop": 5, "unanswerable": 8, "conflicting": 7}
@@ -485,7 +488,8 @@ def audit_plan(
     fixture_count = sum(case["execution_mode"] == "fixture" for case in cases)
     if live_count != 38 or fixture_count != 7:
         raise ValueError("final evaluation must include 38 live and 7 fixture-only cases")
-    investigations = live_count * len(MODES) + fixture_count
+    answer_modes = ("semantic",) if comparison_plan == "economical" else MODES
+    investigations = live_count * len(answer_modes) + fixture_count
     dev = read_jsonl(DEV_CASES)
     final_candidate_ids = {
         source_id for case in cases
@@ -505,6 +509,9 @@ def audit_plan(
         "retrieval_development_count": len(dev),
         "question_id_sets_disjoint": True,
         "retrieval_modes": list(MODES),
+        "comparison_plan": comparison_plan,
+        "answer_generation_modes": list(answer_modes),
+        "retrieval_only_comparison": "semantic, keyword, and hybrid on the same answerable cases",
         "planned_investigations_for_final_comparison": investigations,
         "max_gemini_http_requests_for_final_comparison": investigations * MAX_LLM_REQUESTS,
         "configured_local_daily_investigation_budget": daily_budget,
@@ -519,17 +526,20 @@ def audit_plan(
 def check_indexed_coverage(cases: list[dict[str, Any]]) -> dict[str, Any]:
     """Read-only production coverage gate; verifies identity before any SQL."""
     from app.db.connection import connect_database
-    from app.db.queries import read_indexed_source_evidence
+    from app.db.queries import read_indexed_source_evidence_for_references
     from app.evaluation.metrics import indexed_evidence_pairs, select_eligible_questions
 
     settings = Settings.load()
     if project_ref_from_database_url(settings.database_url) != EXPECTED_SUPABASE_PROJECT_REF:
         raise RuntimeError("DATABASE_URL does not identify the approved Frankfurt Evidence_AI project")
     answerable = [case for case in cases if case["category"] in {"multi_hop", "single_hop"}]
+    supporting_evidence = [
+        fact for case in answerable for fact in case.get("supporting_evidence", [])
+    ]
     with connect_database(autocommit=True) as conn:
         conn.execute("SET statement_timeout = '30000'")
         count = conn.execute("SELECT count(*) FROM public.documents").fetchone()[0]
-        source_evidence = read_indexed_source_evidence(conn)
+        source_evidence = read_indexed_source_evidence_for_references(conn, supporting_evidence)
     pairs = indexed_evidence_pairs(source_evidence)
     eligible, excluded = select_eligible_questions(answerable, pairs)
     references = sum(len(case.get("supporting_evidence", [])) for case in answerable)
@@ -537,7 +547,7 @@ def check_indexed_coverage(cases: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "project_ref": EXPECTED_SUPABASE_PROJECT_REF,
         "indexed_documents": count,
-        "source_rows_read": len(source_evidence),
+        "selected_source_chunk_rows_read": len(source_evidence),
         "answerable_cases": len(answerable), "eligible_cases": len(eligible),
         "excluded_cases": [case["case_id"] for case in excluded],
         "supporting_sentence_references": references,

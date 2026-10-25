@@ -20,6 +20,10 @@ data/cache/
 /reports/PHASE_0.md
 /reports/phase5_logs/
 /reports/final_evaluation_results.jsonl
+/reports/final_retrieval_comparison.json
 /reports/final_evaluation_smoke.jsonl
+/reports/final_evaluation_smoke_*.jsonl
 /reports/.final_evaluation_budget.jsonl
 /reports/.final_evaluation_budget.jsonl.lock
+/reports/.final_evaluation_budget_*.jsonl
+/reports/.final_evaluation_budget_*.jsonl.lock

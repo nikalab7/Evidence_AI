@@ -20,11 +20,20 @@ def _format_latency(summary: Any, key: str) -> str:
     return f"{summary[key] * 1000:.1f} ms"
 
 
+def _format_ms(summary: Any, key: str) -> str:
+    if not isinstance(summary, dict) or not isinstance(summary.get(key), (int, float)):
+        return "pending"
+    return f"{summary[key]:.1f} ms"
+
+
 def render_final_report(
     *, status: str, aggregate: dict[str, Any] | None,
     completed_cases: int, planned_investigations: int,
     results_path: Path, dataset_sha256: str = "pending",
-    daily_budget: int = 0,
+    daily_budget: int = 0, comparison_plan: str = "economical",
+    answer_generation_modes: tuple[str, ...] = ("semantic",),
+    retrieval_comparison: dict[str, Any] | None = None,
+    retrieval_results_path: Path | None = None,
 ) -> str:
     """Render measured results without filling pending values with estimates."""
     aggregate = aggregate or {"modes": {}, "fixture_conflicts": {}}
@@ -61,32 +70,49 @@ def render_final_report(
         "Frankfurt project, 50,000-document, and complete support-coverage preflight.",
         "- Synthetic unanswerable identifiers were checked absent from the local generated corpus. "
         "No synthetic conflict documents were written to Supabase.", "",
-        "## Retrieval configuration comparison", "",
-        "Final-run settings are the existing defaults: BGE-small, semantic/keyword/hybrid modes, "
-        "OR full-text keyword retrieval, equal-weight hybrid RRF (1.0/1.0, k=60), agent tool limit 4, "
-        "and maximum 5 Gemini HTTP requests per investigation. The metrics "
-        "below will use the same 30 answerable cases per mode; unanswerable cases remain in "
-        "answer-quality metrics but not Recall@K/MRR.", "",
-        "| Mode | Recall@5 | Recall@10 | MRR | Median investigation | p95 investigation | Completed / 38 |",
+        "## Retrieval-only configuration comparison", "",
+        "This comparison uses only the same 30 answerable final cases, with no Gemini generation. "
+        "Each mode uses top_k=10 and candidate_k=20; hybrid uses equal weights and RRF k=60. "
+        "These retrieval metrics do not measure answer accuracy.", "",
+        "| Mode | Recall@5 | Recall@10 | MRR | Median retrieval | p95 retrieval | Questions |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for mode in MODES:
-        summary = aggregate.get("modes", {}).get(mode, {})
-        retrieval = summary.get("retrieval") or {}
-        latency = summary.get("investigation_latency")
+        retrieval = ((retrieval_comparison or {}).get("metrics") or {}).get(mode, {})
+        latency = ((retrieval_comparison or {}).get("latency") or {}).get(mode, {})
+        question_count = (
+            f"{retrieval['question_count']} / 30"
+            if isinstance(retrieval.get("question_count"), int) else "pending"
+        )
         lines.append(
             f"| {mode.title()} | {_format_rate(retrieval.get('recall@5'))} "
             f"| {_format_rate(retrieval.get('recall@10'))} | {_format_rate(retrieval.get('mrr'))} "
-            f"| {_format_latency(latency, 'median_seconds')} "
-            f"| {_format_latency(latency, 'p95_nearest_rank_seconds')} "
-            f"| {summary.get('completed_live_cases', 0)} / 38 |"
+            f"| {_format_ms(latency, 'median_ms')} "
+            f"| {_format_ms(latency, 'p95_nearest_rank_ms')} "
+            f"| {question_count} |"
         )
     lines += [
-        "", "## Answer quality and safety metrics", "",
+        "", "## Agent answer quality and safety metrics", "",
+        f"Answer generation plan: `{comparison_plan}`. Only the modes below were sent through "
+        "Gemini. In the economical plan, retrieval-only Keyword and Hybrid results are not answer-quality results.", "",
+        "| Mode | Completed / 38 | Median investigation | p95 investigation | Tool calls | Gemini HTTP requests |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for mode in answer_generation_modes:
+        summary = aggregate.get("modes", {}).get(mode, {})
+        latency = summary.get("investigation_latency")
+        lines.append(
+            f"| {mode.title()} | {summary.get('completed_live_cases', 0)} / 38 "
+            f"| {_format_latency(latency, 'median_seconds')} "
+            f"| {_format_latency(latency, 'p95_nearest_rank_seconds')} "
+            f"| {summary.get('tool_calls', 0)} | {summary.get('api_requests', 0)} |"
+        )
+    lines += [
+        "",
         "| Mode | Correct / completed | Answer-span match | Strict exact match | Answered accuracy | Abstention precision / recall | Citation validity | Retrieved support coverage |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for mode in MODES:
+    for mode in answer_generation_modes:
         summary = aggregate.get("modes", {}).get(mode, {})
         answered = summary.get("answer_correct_cases", 0)
         denominator = summary.get("overall_correctness_denominator", 0)
@@ -99,7 +125,7 @@ def render_final_report(
             f"| {abstention} | {_format_rate(summary.get('citation_validity'))} "
             f"| {_format_rate(summary.get('supporting_evidence_coverage'))} |"
         )
-    for mode in MODES:
+    for mode in answer_generation_modes:
         counts = aggregate.get("modes", {}).get(mode, {}).get("predicted_status_counts", {})
         if counts:
             lines.append(
@@ -128,14 +154,17 @@ def render_final_report(
         "- Supporting evidence coverage is the fraction of gold title/sentence references whose "
         "title and normalized sentence occur in retrieved chunks.", "",
         "## API usage and checkpoint", "",
-        f"- Final comparison plan: {planned_investigations} investigations; maximum "
+        f"- Final `{comparison_plan}` plan: {planned_investigations} investigations; maximum "
         f"{planned_investigations * MAX_LLM_REQUESTS} Gemini HTTP requests. "
-        "Historical Phase 3 examples used 3 and 5 requests each (only two observations), so "
-        "363–605 requests is a rough planning range, not a prediction.",
+        f"The rough planning range using 3–5 requests per investigation is "
+        f"{planned_investigations * 3}–{planned_investigations * MAX_LLM_REQUESTS}; "
+        "this is not a prediction.",
         f"- Completed result rows: {completed_cases}. The runner fsyncs each investigation "
         "reservation and result. On resume, an incomplete final JSONL row is discarded while its "
         "reservation remains uncertain; requests without a result are not automatically retried.",
         f"- Local result/checkpoint file: `{results_path}` (Git-ignored).",
+        f"- Retrieval-only details: `{retrieval_results_path or 'pending'}` (Git-ignored); "
+        "this stage makes database retrieval calls only and uses no Gemini generation.",
         f"- Local `INVESTIGATION_DAILY_BUDGET`: {daily_budget}; {budget_note} "
         "The Frankfurt Blueprint value is `sync: false`; its production value and Gemini provider "
         "quota were not accessible here. This CLI ledger only coordinates local evaluation runs; "
@@ -156,7 +185,7 @@ def render_final_report(
         summary.get("sanitized_failure_examples") for summary in mode_summaries.values()
     )
     if has_failure_examples:
-        for mode in MODES:
+        for mode in answer_generation_modes:
             summary = mode_summaries.get(mode, {})
             counts = summary.get("failure_category_counts", {})
             if counts:
@@ -190,21 +219,28 @@ def render_final_report(
         ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final",
         ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final --check-indexed-coverage",
         ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final --live --dev-smoke --confirm-api-usage",
-        ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final --live --final --confirm-api-usage",
+        ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final --live --final --comparison-plan economical --confirm-api-usage",
+        ".\\.venv\\Scripts\\python.exe -m scripts.evaluate_final --live --final --comparison-plan full --confirm-api-usage",
         "```", "",
         "The live commands require a positive local `INVESTIGATION_DAILY_BUDGET`; `--final` "
         "requires explicit API-usage confirmation and a fresh read-only Frankfurt corpus/evidence "
-        "preflight. The first live step should be the one-question dev smoke. Review its request "
-        "count and provider quota before approving the final run.", "",
+        "preflight. The default economical plan uses semantic generation once per 38 live cases "
+        "and once per seven conflict fixtures (45 total; maximum 225 Gemini requests), then runs "
+        "a separate retrieval-only comparison on the same 30 answerable cases. `--comparison-plan full` "
+        "preserves the 121-investigation, maximum-605-request three-mode answer evaluation.", "",
         "## Current preflight evidence", "",
         "- The deterministic dataset builder passed: 45 cases and 62/62 answerable support "
         "references in the local generated corpus. The candidate pool SHA-256 matches the prior "
         "corpus audit; selected candidate answers were copied unchanged.",
-        "- The previous read-only production coverage report records 40/40 candidates and 92/92 "
-        "support references in the indexed corpus. A new Frankfurt query was attempted but did "
-        "not return a result in this workstation session; current live coverage is not independently verified.",
-        "- `pytest -q`: 224 passed. The limited development smoke command was blocked before model "
-        "loading, database connection, or Gemini requests because the local daily budget is 0.",
+        "- The optimized Frankfurt indexed-coverage gate passed in this run: 50,000 documents, "
+        "30/30 answerable cases, 62/62 exact support references, with 55 selected source/chunk "
+        "rows read. This was a read-only check.",
+        "- The one approved development smoke completed in semantic mode: 1 search tool call, "
+        "3 Gemini HTTP requests, 5.261 seconds total. Retrieval ranked `Anwar Sadat` first; one "
+        "of two drafted citations verified and one was rejected. The answer was not scored as a "
+        "final evaluation result.",
+        "- A prior sandbox-only connection attempt failed before any Gemini call (0 requests); "
+        "the authorized retry completed. Provider quota remaining could not be read from this workstation.",
         "- No full final evaluation, production write, schema change, deployment, or held-out Gemini call was performed.", "",
     ]
     return "\n".join(lines)

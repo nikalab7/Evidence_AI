@@ -325,3 +325,31 @@ Local planning and personal preparation notes are excluded from the repository.
 - No database writes, schema changes, deployment, corpus changes, or held-out
   tuning were performed. Detailed scope and reproducible commands are in
   `reports/final_evaluation.md`.
+
+## Phase 7.1 smoke and economical final-evaluation plan — 2026-10-25
+
+- Codex assistance was used to narrow the read-only indexed-coverage query to
+  the 62 required title/sentence references, add the default economical
+  45-investigation plan, preserve the complete 121-investigation plan, and add
+  a separate no-Gemini retrieval comparison across Semantic, Keyword, and
+  Hybrid for the same 30 answerable cases. Retrieval-only scores are kept
+  separate from generated-answer quality; economical answer quality is
+  reported for Semantic only.
+- The Frankfurt read-only check actually passed: 50,000 indexed documents,
+  30/30 answerable cases, 62/62 required evidence references, and 55 selected
+  provenance/chunk rows read. The exact project identity was checked before
+  the SQL query. No database data or schema was modified.
+- One authorized development smoke completed with one Semantic search tool
+  call and 3 Gemini HTTP requests in 5.260586 seconds. It returned an answer
+  with `Anwar Sadat` ranked first; one of two draft citations verified and one
+  was rejected. The smoke was therefore recorded as a mixed citation result,
+  not an accuracy pass. A preceding sandbox connection failure made 0 Gemini
+  calls. The available provider quota could not be inspected from this
+  workstation; the owner must check the selected project in AI Studio.
+- Offline plan audits passed for economical (45 investigations, maximum 225
+  Gemini requests) and full (121 investigations, maximum 605 requests). The
+  45-case held-out evaluation has not been run. No production write, schema
+  change, deployment, Mindo/Sydney access, or held-out Gemini request occurred.
+- The complete local suite passed 229 tests. See
+  `reports/phase7_1_live_smoke.md` and `reports/final_evaluation.md` for
+  measurements and reproduction commands.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -493,6 +494,83 @@ def read_indexed_source_evidence(conn: Connection) -> list[dict[str, Any]]:
                ORDER BY s.source_id, c.chunk_position, c.chunk_id"""
         ).fetchall()
     ]
+
+
+def read_indexed_source_evidence_for_references(
+    conn: Connection, supporting_evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Read paragraph text only for source titles/sentences required by an eval set.
+
+    Title equality uses the existing B-tree index. Source sentence normalization stays
+    in Python to match the corpus evaluator's Unicode and whitespace rules exactly.
+    """
+    from app.ingestion.corpus_core import normalize_text
+
+    required_pairs: set[tuple[str, str]] = set()
+    for fact in supporting_evidence:
+        title, sentence = fact.get("title"), fact.get("sentence")
+        if not isinstance(title, str) or not isinstance(sentence, str):
+            raise ValueError("supporting evidence requires string titles and sentences")
+        normalized_title, normalized_sentence = normalize_text(title), normalize_text(sentence)
+        if not normalized_title or not normalized_sentence:
+            raise ValueError("supporting evidence titles and sentences cannot be empty")
+        required_pairs.add((normalized_title, normalized_sentence))
+    if not required_pairs:
+        return []
+
+    titles = sorted({title for title, _ in required_pairs})
+    source_rows = conn.execute(
+        """SELECT source_id, doc_id, title_normalized, sentences
+           FROM public.document_sources
+           WHERE title_normalized = ANY(%s)""",
+        (titles,),
+    ).fetchall()
+
+    matching_sources: dict[str, dict[str, Any]] = {}
+    for source_id, doc_id, title_normalized, sentences in source_rows:
+        normalized_title = normalize_text(title_normalized)
+        matching_sentences = [
+            sentence for sentence in sentences
+            if isinstance(sentence, str)
+            and (normalized_title, normalize_text(sentence)) in required_pairs
+        ]
+        if matching_sentences:
+            matching_sources[source_id] = {
+                "source_id": source_id,
+                "doc_id": doc_id,
+                "title_normalized": title_normalized,
+                "sentences": matching_sentences,
+            }
+
+    doc_ids = sorted({source["doc_id"] for source in matching_sources.values()})
+    if not doc_ids:
+        return []
+    chunk_rows = conn.execute(
+        """SELECT c.doc_id,
+                  substring(d.full_text FROM c.start_char + 1 FOR c.end_char - c.start_char)
+           FROM public.chunks AS c
+           JOIN public.documents AS d ON d.doc_id = c.doc_id
+           WHERE c.doc_id = ANY(%s)
+             AND c.chunking_strategy = 'paragraph'
+           ORDER BY c.doc_id, c.chunk_position, c.chunk_id""",
+        (doc_ids,),
+    ).fetchall()
+    chunks_by_doc: dict[str, list[str]] = defaultdict(list)
+    for doc_id, chunk_text in chunk_rows:
+        chunks_by_doc[doc_id].append(chunk_text)
+
+    selected = []
+    for source in matching_sources.values():
+        selected.extend(
+            {
+                "source_id": source["source_id"],
+                "title_normalized": source["title_normalized"],
+                "sentences": source["sentences"],
+                "chunk_text": chunk_text,
+            }
+            for chunk_text in chunks_by_doc.get(source["doc_id"], [])
+        )
+    return selected
 
 
 def insert_batch(conn: Connection, documents: Sequence[dict[str, Any]]) -> dict[str, int]:

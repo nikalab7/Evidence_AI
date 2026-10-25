@@ -10,6 +10,7 @@ from app.evaluation.final_runner import (
     _failure_categories,
     _repair_incomplete_result_tail,
     _recent_reservations,
+    audit_plan,
     build_run_key,
     make_case_result,
     require_complete_indexed_coverage,
@@ -17,9 +18,12 @@ from app.evaluation.final_runner import (
     run_live,
 )
 from app.evaluation.reporting import render_final_report
+from app.db.queries import read_indexed_source_evidence_for_references
+from app.evaluation.metrics import indexed_evidence_pairs
 from app.llm.agent import investigate
 from app.llm.schemas import FunctionCall, LLMResponse
 from scripts import prepare_final_eval as prepare
+from scripts import evaluate_final
 
 
 def _all_candidate_pairs(candidates):
@@ -169,6 +173,182 @@ def test_final_live_gate_requires_complete_frankfurt_indexed_evidence():
         require_complete_indexed_coverage(cases, {**coverage, "eligible_cases": 0})
     with pytest.raises(RuntimeError, match="support-reference count"):
         require_complete_indexed_coverage(cases, {**coverage, "supporting_sentence_references_found": 0})
+
+
+def test_indexed_coverage_query_reads_only_required_titles_and_documents():
+    class Rows:
+        def __init__(self, values):
+            self.values = values
+
+        def fetchall(self):
+            return self.values
+
+    class Connection:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, query, params):
+            self.calls.append((query, params))
+            if "FROM public.document_sources" in query:
+                return Rows([
+                    ("source-1", "doc-1", "example title", ["Known   fact.", "Unneeded sentence."]),
+                    ("source-2", "doc-2", "example title", ["Different fact."]),
+                    ("source-3", "doc-3", "unrelated title", ["Known fact."]),
+                ])
+            assert "FROM public.chunks AS c" in query
+            return Rows([("doc-1", "Context. Known fact. More context.")])
+
+    conn = Connection()
+    rows = read_indexed_source_evidence_for_references(conn, [
+        {"title": "Example Title", "sentence": "KNOWN fact."},
+    ])
+
+    assert len(conn.calls) == 2
+    assert conn.calls[0][1] == (["example title"],)
+    assert conn.calls[1][1] == (["doc-1"],)
+    pairs = indexed_evidence_pairs(rows)
+    assert ("example title", "known fact.") in pairs
+    assert all("Unneeded sentence." not in row["sentences"] for row in rows)
+
+
+def _evaluation_plan_cases():
+    cases = []
+    for category, count in (("multi_hop", 25), ("single_hop", 5), ("unanswerable", 8)):
+        for index in range(count):
+            cases.append({
+                "case_id": f"{category}-{index}",
+                "category": category,
+                "execution_mode": "live",
+                "source_question_id": f"final-only-{category}-{index}",
+            })
+    for index in range(7):
+        cases.append({
+            "case_id": f"conflicting-{index}", "category": "conflicting",
+            "execution_mode": "fixture",
+        })
+    return cases
+
+
+def test_economical_and_full_evaluation_plans_preserve_expected_request_caps():
+    cases = _evaluation_plan_cases()
+    economical = audit_plan(
+        cases, dataset_sha256="final-dataset", daily_budget=0,
+        comparison_plan="economical",
+    )
+    full = audit_plan(
+        cases, dataset_sha256="final-dataset", daily_budget=0,
+        comparison_plan="full",
+    )
+
+    assert economical["planned_investigations_for_final_comparison"] == 45
+    assert economical["max_gemini_http_requests_for_final_comparison"] == 225
+    assert economical["answer_generation_modes"] == ["semantic"]
+    assert full["planned_investigations_for_final_comparison"] == 121
+    assert full["max_gemini_http_requests_for_final_comparison"] == 605
+    assert full["answer_generation_modes"] == ["semantic", "keyword", "hybrid"]
+
+
+def test_retrieval_only_cases_exclude_gold_answers_and_non_answerable_cases(monkeypatch, tmp_path):
+    cases = [
+        {
+            "case_id": f"answer-{index}", "category": "multi_hop",
+            "execution_mode": "live", "expected_status": "answered",
+            "question": f"Question {index}?", "gold_answer": "private gold",
+            "supporting_evidence": [{"title": "T", "sentence": "Fact."}],
+        }
+        for index in range(30)
+    ] + [
+        {"case_id": "no-answer", "expected_status": "insufficient", "execution_mode": "live"},
+        {"case_id": "fixture", "expected_status": "conflicting", "execution_mode": "fixture"},
+    ]
+    answerable = evaluate_final._answerable_live_cases(cases)
+    assert len(answerable) == 30
+    assert all("gold_answer" not in case for case in answerable)
+
+    observed = {}
+
+    def fake_run_evaluation(**kwargs):
+        observed.update(kwargs)
+        return {"status": "passed", "eligible_questions": 30}
+
+    monkeypatch.setattr("scripts.evaluate_retrieval.run_evaluation", fake_run_evaluation)
+    result = evaluate_final._run_retrieval_only_comparison(
+        cases, dataset_sha="final-dataset", details_path=tmp_path / "nested" / "retrieval.json",
+    )
+
+    assert result["eligible_questions"] == 30
+    assert observed["require_all_eligible"] is True
+    assert observed["dataset_sha256"] == "final-dataset"
+    assert observed["top_k"] == 10 and observed["candidate_k"] == 20
+    assert observed["semantic_weight"] == observed["keyword_weight"] == 1.0
+    assert observed["rrf_k"] == 60
+    assert len(observed["question_rows"]) == 30
+    assert all("gold_answer" not in case for case in observed["question_rows"])
+
+
+def test_retrieval_evaluation_can_fail_closed_on_an_unexpected_corpus_count(monkeypatch):
+    import scripts.evaluate_retrieval as retrieval_eval
+
+    class Result:
+        def __init__(self, value):
+            self.value = value
+
+        def fetchone(self):
+            return (self.value,)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, query, _params=None):
+            if "SELECT count(*) FROM public.documents" in query:
+                return Result(49_999)
+            assert "SET statement_timeout" in query
+            return Result(None)
+
+    monkeypatch.setattr(retrieval_eval, "connect_database", lambda **_kwargs: Connection())
+    monkeypatch.setattr(retrieval_eval, "read_indexed_source_evidence_for_references", lambda *_args: [])
+    monkeypatch.setattr(
+        retrieval_eval, "load_model",
+        lambda *_args, **_kwargs: pytest.fail("model must not load for a wrong corpus count"),
+    )
+
+    with pytest.raises(RuntimeError, match="expected 50000 indexed documents"):
+        retrieval_eval.run_evaluation(
+            question_rows=[{
+                "question_id": "case", "question": "Q?",
+                "supporting_evidence": [{"title": "T", "sentence": "S."}],
+            }],
+            expected_indexed_documents=50_000,
+        )
+
+
+def test_economical_final_report_does_not_label_retrieval_only_modes_as_answer_scores(tmp_path):
+    report = render_final_report(
+        status="prepared_live_evaluation_pending", aggregate={
+            "modes": {
+                "semantic": {"completed_live_cases": 0},
+                "keyword": {"answer_correct_cases": 99},
+                "hybrid": {"answer_correct_cases": 99},
+            },
+            "fixture_conflicts": {},
+        }, completed_cases=0, planned_investigations=45,
+        results_path=tmp_path / "results.jsonl", comparison_plan="economical",
+        answer_generation_modes=("semantic",), retrieval_comparison={
+            "metrics": {mode: {"question_count": 30} for mode in ("semantic", "keyword", "hybrid")},
+        },
+    )
+    answer_section = report.split("## Agent answer quality and safety metrics", 1)[1]
+    answer_section = answer_section.split("## Metric definitions", 1)[0]
+
+    assert "| Semantic |" in answer_section
+    assert "| Keyword |" not in answer_section
+    assert "| Hybrid |" not in answer_section
+    assert "45 investigations" in report
+    assert "maximum 225 Gemini HTTP requests" in report
 
 
 def test_ranked_hits_deduplicate_by_first_tool_occurrence():

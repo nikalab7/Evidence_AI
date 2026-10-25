@@ -1,84 +1,119 @@
-# Phase 7 — Final Evaluation & Quality Report
+# Phase 7 — Final Evaluation Plan and Quality Report
 
-Evaluation status: **prepared_live_evaluation_pending**
+Status: **prepared; final evaluation pending separate operator approval**
 
-No full live answer evaluation has been run in the current workspace. Cells marked `pending` are intentionally unmeasured.
+No held-out final investigation has run. Metrics for the final set remain pending.
 
-- Final dataset SHA-256: `d2663d7a8deaf573d8eaac508296a35dacbd4ea43512986a2b34b6ce9c0c0f5e`.
-- Reproduction manifest: [`eval/final_answer_eval_manifest.json`](../eval/final_answer_eval_manifest.json); it records candidate and dev hashes, seed, quotas, selected IDs, and corpus hash.
 ## Dataset and isolation
 
-- Final set: 45 cases: 25 multi-hop/cross-document HotpotQA cases, 5 direct single-hop cases, 8 synthetic unanswerable cases, and 7 synthetic conflict fixtures.
-- The 38 live cases run through the production service path. The 7 conflict cases use injected synthetic evidence with the production agent and citation/conflict validator; they do not measure database retrieval.
-- The separate 200-question retrieval development set is used only for tuning and the one-question smoke option. Final gold answers are not sent to the agent.
-- Answerable support coverage for all 30 live answerable cases was checked against the local corpus during dataset construction. The 25 selected candidates and the five single-hop source facts are drawn from the prior indexed 40/40 candidate coverage check (92/92 support references). Before any final Gemini call, the CLI now repeats a read-only Frankfurt project, 50,000-document, and complete support-coverage preflight.
-- Synthetic unanswerable identifiers were checked absent from the local generated corpus. No synthetic conflict documents were written to Supabase.
+- The fixed set contains 45 cases: 25 multi-hop/cross-document cases, 5 single-hop cases, 8 unanswerable cases, and 7 fixture-only conflict cases.
+- Thirty answerable cases have complete gold evidence; 8 cases are unanswerable. The 7 conflict cases use synthetic evidence injected into the agent and are not indexed in Supabase.
+- The separate retrieval development set contains 200 questions. It remains separate from final answer scoring; one development question was used for the authorized smoke only.
+- The runner never sends gold answers to Gemini. The retrieval-only stage receives only question text, case IDs, and support references; its input omits gold answers.
+- Final evaluation uses the immutable manifest and case file. Do not edit gold answers based on observed model output.
 
-## Retrieval configuration comparison
+## Indexed coverage preflight
 
-Final-run settings are the existing defaults: BGE-small, semantic/keyword/hybrid modes, OR full-text keyword retrieval, equal-weight hybrid RRF (1.0/1.0, k=60), agent tool limit 4, and maximum 5 Gemini HTTP requests per investigation. The metrics below will use the same 30 answerable cases per mode; unanswerable cases remain in answer-quality metrics but not Recall@K/MRR.
+The read-only Frankfurt preflight passed on 2026-10-25:
 
-| Mode | Recall@5 | Recall@10 | MRR | Median investigation | p95 investigation | Completed / 38 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Semantic | pending | pending | pending | pending | pending | 0 / 38 |
-| Keyword | pending | pending | pending | pending | pending | 0 / 38 |
-| Hybrid | pending | pending | pending | pending | pending | 0 / 38 |
+| Check | Result |
+| --- | ---: |
+| Project reference | `nldnpqhqrfwjgxcqeuru` |
+| Indexed documents | 50,000 |
+| Answerable cases with complete indexed support | 30 / 30 |
+| Exact title/sentence references found | 62 / 62 |
+| Selected provenance/chunk rows read | 55 |
 
-## Answer quality and safety metrics
+Coverage reads are scoped to the required normalized source titles and sentences, then reconstructs paragraph text only for matching document IDs. It does not scan all corpus rows. No database write or schema change was performed. The final command repeats this identity, count, and complete-evidence gate before any Gemini investigation.
 
-| Mode | Correct / completed | Answer-span match | Strict exact match | Answered accuracy | Abstention precision / recall | Citation validity | Retrieved support coverage |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Semantic | 0 / 0 | pending | pending | pending | pending / pending | pending | pending |
-| Keyword | 0 / 0 | pending | pending | pending | pending / pending | pending | pending |
-| Hybrid | 0 / 0 | pending | pending | pending | pending / pending | pending | pending |
+## Authorized development smoke
 
-Conflict fixture result: 0 / 0 correct detections; pending unless the isolated Gemini fixture run completed.
+One development smoke completed with the production investigation pipeline. A preceding sandbox-only connection attempt stopped before a Gemini request; the authorized retry succeeded.
 
-## Metric definitions
+| Measurement | Result |
+| --- | ---: |
+| Gemini HTTP requests | 3 |
+| Gemini model | `gemini-3.5-flash-lite` |
+| Retrieval mode | Semantic |
+| Search tool calls | 1 |
+| Retrieved chunks | 5 |
+| Top result | `Anwar Sadat` (rank 1) |
+| Draft citations | 2 |
+| Verified citations | 1 |
+| Rejected citations | 1 |
+| Total investigation latency | 5.260586 s |
+| Predicted status | `answered` |
 
-- Retrieval Recall@5/10 and MRR are supporting-title metrics over deduplicated chunks returned by the investigation's search-tool calls in order, assigned a cumulative first-seen investigation rank. The denominator is the complete-support answerable cases actually completed for each mode.
-- Answer-span match is a normalized contiguous token match of the gold answer within the verified central claim. Strict exact match requires the normalized central claim to equal the gold answer. Both are automated string-match proxies, not entailment judgments.
-- Overall correctness counts correct abstentions for the 8 unanswerable cases and requires an `answered` status plus answer-span match for answerable cases. Predicted answer, abstention, and conflict statuses are also counted separately.
-- Citation validity is accepted citations divided by citations emitted in the model's draft. The existing validator checks retrieved chunk IDs and exact quote presence after whitespace normalization; it does not prove claim entailment.
-- Supporting evidence coverage is the fraction of gold title/sentence references whose title and normalized sentence occur in retrieved chunks.
+The response named Muhammad Anwar el-Sadat for the development question. This is not a final accuracy result: one citation was rejected, so the smoke did not pass as a citation-clean answer. The smoke used 3 Gemini requests; the failed earlier connection attempt used 0. No final-set investigation ran.
 
-## API usage and checkpoint
+The current remaining provider quota could not be read from this workstation. Google directs users to the selected project’s AI Studio rate-limit and usage pages; limits vary by model, project, and tier ([Gemini API rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), [usage and billing](https://ai.google.dev/gemini-api/docs/billing)). Check the project and model there immediately before approving the final run.
 
-- Final comparison plan: 121 investigations; maximum 605 Gemini HTTP requests. Historical Phase 3 examples used 3 and 5 requests each (only two observations), so 363–605 requests is a rough planning range, not a prediction.
-- Completed result rows: 0. The runner fsyncs each investigation reservation and result. On resume, an incomplete final JSONL row is discarded while its reservation remains uncertain; requests without a result are not automatically retried.
-- Local result/checkpoint file: `C:\Users\user\Desktop\Upgaming-AI\reports\final_evaluation_results.jsonl` (Git-ignored).
-- Local `INVESTIGATION_DAILY_BUDGET`: 0; The configured local value is 0 and live calls are disabled. The Frankfurt Blueprint value is `sync: false`; its production value and Gemini provider quota were not accessible here. This CLI ledger only coordinates local evaluation runs; it is not a durable global cap shared with Render.
+## Recommended economical evaluation
 
-## Historical retrieval-only reference (200-question dev set)
+The default `economical` plan runs each of the 45 distinct cases through the agent once:
 
-These are previously measured Phase 6A retrieval results, not Phase 7 answer metrics and not a substitute for the pending final comparison.
+- 38 live investigations (30 answerable and 8 unanswerable) in Semantic mode.
+- 7 conflict-fixture investigations through the production agent and validators, using isolated synthetic evidence.
+- Maximum: 45 investigations × 5 Gemini HTTP requests = **225 requests**.
+- Planning range: **135–225 requests**, based on prior observations of 3 and 5 requests per investigation; this is a rough estimate, not a quota guarantee. The Phase 7.1 development smoke used 3 requests, but is not included in the final-set estimate.
+- After all agent investigations complete, the runner performs a separate retrieval-only comparison on the same 30 answerable cases in Semantic, Keyword, and Hybrid modes. This step makes database/search calls only and no Gemini calls.
+- Retrieval-only settings: top_k=10, candidate_k=20, Semantic weight 1.0, Keyword weight 1.0, RRF k=60. Each mode’s Recall@5, Recall@10, MRR, median latency, and p95 latency is reported separately from answer quality.
+- Answer correctness, abstention, conflict, and citation metrics in this plan are reported for Semantic generation only. Keyword/Hybrid retrieval metrics are not answer-accuracy metrics.
 
-| Mode / variant | Recall@5 | Recall@10 | MRR | Median latency | p95 latency |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Semantic | 0.8425 | 0.8775 | 0.927881 | 660.919 ms | 1,079.142 ms |
-| OR keyword baseline | 0.2350 | 0.3625 | 0.254454 | 1,572.944 ms | 8,821.469 ms |
-| Equal-weight hybrid baseline | 0.7475 | 0.8550 | 0.764548 | 2,245.356 ms | 9,756.986 ms |
-| Informative-term keyword (0.05) | 0.2950 | 0.4550 | 0.342272 | 272.986 ms | 1,642.982 ms |
+### Full comparison remains available
 
-## Failure analysis
+For reproducibility, the original `full` plan remains selectable: generate answers in Semantic, Keyword, and Hybrid for the 38 live cases, plus seven fixture investigations: **121 investigations**, up to **605 Gemini requests**. It also runs the retrieval-only three-mode comparison after all agent results complete.
 
-No Phase 7 live failure examples exist yet. After an approved run, the report will include sanitized case IDs, questions, failure labels, support-reference coverage, and validator diagnostics without retrieved text. These are diagnostic signals; answer-span mismatches still require review against verified citations before being called factual errors.
+## Metrics and interpretation
 
-## Reproduction
+- Retrieval Recall@5/10 and MRR are support-title metrics for the top-ranked chunks. Retrieval-only scores use a uniform single query per case; they do not measure multi-step answer quality.
+- Answer-span match and exact match are string-based proxies against the verified central claim, not human factual judgments.
+- Answer correctness is scored for answerable and unanswerable cases. Correct abstentions are counted separately from correct answers.
+- Abstention precision/recall uses the 8 unanswerable cases. Conflict detection uses the 7 isolated fixtures.
+- Citation validity is verified citations divided by drafted citations. Exact quote presence does not prove claim entailment.
+- The per-case JSONL records status, answer, citations, evidence coverage, ranks, tool/API counts, latency, and sanitized error labels. It is Git-ignored and checkpointed so completed investigations are not repeated.
+
+## Commands
+
+Audit plan and immutable local assets without Gemini or database access:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.prepare_final_eval
 .\.venv\Scripts\python.exe -m scripts.evaluate_final
-.\.venv\Scripts\python.exe -m scripts.evaluate_final --check-indexed-coverage
-.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --dev-smoke --confirm-api-usage
-.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --confirm-api-usage
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --comparison-plan full
 ```
 
-The live commands require a positive local `INVESTIGATION_DAILY_BUDGET`; `--final` requires explicit API-usage confirmation and a fresh read-only Frankfurt corpus/evidence preflight. The first live step should be the one-question dev smoke. Review its request count and provider quota before approving the final run.
+Repeat the read-only indexed evidence gate:
 
-## Current preflight evidence
+```powershell
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --check-indexed-coverage
+```
 
-- The deterministic dataset builder passed: 45 cases and 62/62 answerable support references in the local generated corpus. The candidate pool SHA-256 matches the prior corpus audit; selected candidate answers were copied unchanged.
-- The previous read-only production coverage report records 40/40 candidates and 92/92 support references in the indexed corpus. A new Frankfurt query was attempted but did not return a result in this workstation session; current live coverage is not independently verified.
-- `pytest -q`: 224 passed. The limited development smoke command was blocked before model loading, database connection, or Gemini requests because the local daily budget is 0.
-- No full final evaluation, production write, schema change, deployment, or held-out Gemini call was performed.
+The one authorized development smoke command used a process-only budget override; it did not edit `.env` or Render:
+
+```powershell
+$env:INVESTIGATION_DAILY_BUDGET = "1"
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --dev-smoke --confirm-api-usage --max-investigations 1
+Remove-Item Env:INVESTIGATION_DAILY_BUDGET
+```
+
+**Do not run the final commands until the operator separately approves the estimated Gemini usage and confirms quota.** Default economical run:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --comparison-plan economical --confirm-api-usage
+```
+
+Original full comparison:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --comparison-plan full --confirm-api-usage
+```
+
+`INVESTIGATION_DAILY_BUDGET` must be set to a positive local value for either live run. It remains process-local to the evaluation CLI; it does not change Render’s setting and is not a durable global quota. Gemini quota availability is not checked automatically.
+
+## Pending results and safeguards
+
+- Final retrieval and answer metrics: **pending**; no held-out case has been sent to Gemini.
+- Final quality, conflicts, failure analysis, and full-run latency: **pending**.
+- `pytest -q`: 229 passed in this Phase 7.1 checkout.
+- No production writes, schema changes, deployment, Mindo/Sydney access, or held-out-set tuning were performed.
+- The 45-case result file, retrieval comparison JSON, and budget ledger are Git-ignored. The runner uses a lock, fsync checkpoints, and does not automatically retry an investigation with a reservation but no saved result.

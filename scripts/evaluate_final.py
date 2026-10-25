@@ -25,9 +25,18 @@ from app.evaluation.final_runner import (
 )
 from app.evaluation.reporting import render_final_report
 
+DEFAULT_RETRIEVAL_RESULTS = ROOT / "reports" / "final_retrieval_comparison.json"
 
-def _offline_audit(cases: list[dict[str, Any]], dataset_sha: str, settings: Settings) -> dict[str, Any]:
-    plan = audit_plan(cases, dataset_sha256=dataset_sha, daily_budget=settings.investigation_daily_budget)
+
+def _offline_audit(
+    cases: list[dict[str, Any]], dataset_sha: str, settings: Settings,
+    *, comparison_plan: str = "economical",
+) -> dict[str, Any]:
+    plan = audit_plan(
+        cases, dataset_sha256=dataset_sha,
+        daily_budget=settings.investigation_daily_budget,
+        comparison_plan=comparison_plan,
+    )
     candidate_path = ROOT / "eval" / "eval_candidates.jsonl"
     dev_path = ROOT / "eval" / "retrieval_dev.jsonl"
     data_path = ROOT / "data" / "corpus.jsonl"
@@ -63,6 +72,47 @@ def _offline_audit(cases: list[dict[str, Any]], dataset_sha: str, settings: Sett
     return plan
 
 
+def _answerable_live_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the final answerable live cases for retrieval-only scoring."""
+    return [
+        {
+            "case_id": case["case_id"],
+            "question_id": case["case_id"],
+            "category": case["category"],
+            "execution_mode": case["execution_mode"],
+            "question": case["question"],
+            "supporting_evidence": case["supporting_evidence"],
+        }
+        for case in cases
+        if case.get("expected_status") == "answered"
+        and case.get("execution_mode", "live") == "live"
+    ]
+
+
+def _run_retrieval_only_comparison(
+    cases: list[dict[str, Any]], *, dataset_sha: str, details_path: Path,
+) -> dict[str, Any]:
+    """Compare all retrieval modes without calling Gemini or exposing gold answers."""
+    from scripts.evaluate_retrieval import run_evaluation
+
+    answerable_cases = _answerable_live_cases(cases)
+    if len(answerable_cases) != 30:
+        raise ValueError("retrieval-only final comparison requires the 30 audited answerable cases")
+    details_path.parent.mkdir(parents=True, exist_ok=True)
+    return run_evaluation(
+        question_rows=answerable_cases,
+        require_all_eligible=True,
+        expected_indexed_documents=50_000,
+        dataset_sha256=dataset_sha,
+        top_k=10,
+        candidate_k=20,
+        semantic_weight=1.0,
+        keyword_weight=1.0,
+        rrf_k=60,
+        details_json=details_path,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group()
@@ -72,8 +122,15 @@ def main() -> int:
     parser.add_argument("--dev-smoke", action="store_true", help="run one retrieval-development question (requires --live)")
     parser.add_argument("--confirm-api-usage", action="store_true", help="confirm the printed Gemini request estimate")
     parser.add_argument("--max-investigations", type=int, help="cap this invocation; completed cases are checkpointed")
-    parser.add_argument("--modes", default=",".join(MODES), help="comma-separated retrieval modes")
+    parser.add_argument(
+        "--comparison-plan", choices=("economical", "full"), default="economical",
+        help="economical: semantic answer evaluation plus retrieval-only mode comparison; full: answer evaluation in all modes",
+    )
+    parser.add_argument(
+        "--modes", help=argparse.SUPPRESS,
+    )
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
+    parser.add_argument("--retrieval-results", type=Path, default=DEFAULT_RETRIEVAL_RESULTS)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--cases", type=Path, default=FINAL_CASES)
@@ -89,24 +146,34 @@ def main() -> int:
             print(json.dumps({"status": "passed", **report}, sort_keys=True))
             return 0
         if not args.live:
-            report = _offline_audit(cases, dataset_sha, settings)
+            report = _offline_audit(
+                cases, dataset_sha, settings, comparison_plan=args.comparison_plan,
+            )
             print(json.dumps(report, ensure_ascii=False, sort_keys=True))
             return 0
         if args.final == args.dev_smoke:
             raise ValueError("choose exactly one of --final or --dev-smoke with --live")
         if not args.confirm_api_usage:
             raise ValueError("live calls require --confirm-api-usage after reviewing the request estimate")
-        modes = tuple(item.strip() for item in args.modes.split(",") if item.strip())
+        modes = MODES if args.comparison_plan == "full" else ("semantic",)
         if args.final:
-            if set(modes) != set(MODES):
-                raise ValueError("final comparison requires the same complete semantic,keyword,hybrid mode set")
-            final_plan = _offline_audit(cases, dataset_sha, settings)
+            if args.modes is not None:
+                requested_modes = tuple(item.strip() for item in args.modes.split(",") if item.strip())
+                if requested_modes != modes:
+                    raise ValueError(
+                        f"{args.comparison_plan} plan requires modes {','.join(modes)}"
+                    )
+            final_plan = _offline_audit(
+                cases, dataset_sha, settings, comparison_plan=args.comparison_plan,
+            )
             corpus_check = final_plan["offline_corpus_support_check"]
             if corpus_check.get("status") != "passed":
                 raise RuntimeError("final live run requires a passing local corpus and gold-evidence audit")
             planned = final_plan["planned_investigations_for_final_comparison"]
             print(json.dumps({
                 "preflight": "live final evaluation", "cases": len(cases),
+                "comparison_plan": args.comparison_plan,
+                "answer_generation_modes": list(modes),
                 "planned_investigations": planned,
                 "maximum_gemini_http_requests": planned * MAX_LLM_REQUESTS,
                 "local_daily_budget": settings.investigation_daily_budget,
@@ -151,22 +218,33 @@ def main() -> int:
             plan = final_plan or audit_plan(
                 cases, dataset_sha256=dataset_sha,
                 daily_budget=settings.investigation_daily_budget,
+                comparison_plan=args.comparison_plan,
             )
             aggregate = report.get("aggregate", {})
+            answer_modes = tuple(plan["answer_generation_modes"])
             complete = (
                 all(aggregate.get("modes", {}).get(mode, {}).get("completed_live_cases") == 38
-                    for mode in MODES)
+                    for mode in answer_modes)
                 and aggregate.get("fixture_conflicts", {}).get("completed") == 7
             )
+            retrieval_comparison = None
+            if complete:
+                retrieval_comparison = _run_retrieval_only_comparison(
+                    cases, dataset_sha=dataset_sha, details_path=args.retrieval_results,
+                )
             args.report.parent.mkdir(parents=True, exist_ok=True)
             args.report.write_text(render_final_report(
                 status="complete" if complete else "partial_budget_or_interruption",
                 aggregate=aggregate,
-                completed_cases=report.get("completed_total", 0),
+                completed_cases=report.get("completed_total", report.get("completed", 0)),
                 planned_investigations=plan["planned_investigations_for_final_comparison"],
                 results_path=args.results,
                 dataset_sha256=dataset_sha,
                 daily_budget=settings.investigation_daily_budget,
+                comparison_plan=args.comparison_plan,
+                answer_generation_modes=answer_modes,
+                retrieval_comparison=retrieval_comparison,
+                retrieval_results_path=args.retrieval_results,
             ), encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
         return 0

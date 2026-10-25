@@ -127,52 +127,64 @@ The default builder writes the report and 40 candidate questions; use
 
 ## Phase 7: final answer evaluation
 
-`eval/final_answer_eval.jsonl` contains 45 reproducible cases: 25 selected
-multi-hop HotpotQA questions with unchanged gold answers, 5 single-hop facts,
-8 synthetic unanswerable questions, and 7 synthetic conflict fixtures. The
-conflict fixtures use injected text in the production agent and citation
-validator; they do not test database retrieval and were not ingested. The 200
-retrieval-development questions are a separate file.
+`eval/final_answer_eval.jsonl` contains 45 fixed cases: 25 multi-hop
+cross-document questions, 5 single-hop facts, 8 synthetic unanswerable cases,
+and 7 conflict fixtures. Conflict evidence is injected only into the agent and
+was not indexed. The separate 200-question retrieval development set is not
+used as final answer evaluation. Gold answers remain evaluator-side.
 
-Regenerate the cases and manifest locally (requires the Git-ignored corpus):
+The optimized read-only Frankfurt coverage gate passed: 50,000 indexed
+documents, all 30 answerable cases eligible, and 62/62 exact supporting
+title/sentence references verified after reading 55 selected source/chunk rows.
+The one authorized development smoke used Semantic retrieval and consumed 3
+Gemini requests. It returned an answer in 5.261 seconds after one search tool
+call; one of its two drafted citations was rejected, so this is not a
+citation-clean accuracy result. No held-out final investigation has run.
+
+Audit the cases and both run plans without database or Gemini access:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.prepare_final_eval
 .\.venv\Scripts\python.exe -m scripts.evaluate_final
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --comparison-plan full
 .\.venv\Scripts\python.exe -m scripts.evaluate_final --check-indexed-coverage
 ```
 
-The default command is an offline audit and makes no Gemini or database call.
-The coverage command is read-only and checks the fail-closed Frankfurt project.
-Run one development smoke first, then review its request count and the Gemini
-project quota:
+The recommended `economical` plan runs the 45 cases through the agent once:
+Semantic for 38 live cases and isolated fixture runs for 7 conflict cases. Its
+maximum is 225 Gemini requests (rough planning range 135–225, not a quota
+guarantee). Then a separate no-Gemini retrieval comparison runs Semantic,
+Keyword, and Hybrid on the same 30 answerable cases. Retrieval-only scores are
+not answer-accuracy scores. The original 3-mode answer comparison remains
+available as `--comparison-plan full` and requires 121 investigations, up to
+605 Gemini requests.
+
+**Wait for separate operator approval before running the final evaluation.**
+Immediately before approval, check current model/project quota in
+[Google AI Studio rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
+Quota varies by model, project, and tier; it was not accessible from this
+workstation. Once approved and a positive local
+`INVESTIGATION_DAILY_BUDGET` is set, the recommended command is:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --dev-smoke --confirm-api-usage
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --comparison-plan economical --confirm-api-usage
 ```
 
-Only after reviewing the estimate and approving the usage, start the final
-comparison:
+The reproducible full comparison command is:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --confirm-api-usage
+.\.venv\Scripts\python.exe -m scripts.evaluate_final --live --final --comparison-plan full --confirm-api-usage
 ```
 
-The full comparison plans 121 investigations (38 production-pipeline cases in
-each of semantic, keyword, and hybrid modes, plus 7 fixture-only conflict
-investigations) and allows up to 605 Gemini HTTP requests. A JSONL result and
-rolling-24-hour local budget ledger are fsynced as work progresses. Completed
-calls are skipped on resume; an incomplete final result line is discarded, but
-its interrupted reservation remains uncertain and is not retried automatically.
-The final command first revalidates the fixed dataset, unchanged gold answers,
-and local corpus support, then checks Frankfurt identity, 50,000 documents, and
-complete indexed answerable support before any Gemini call. Set a positive local
-`INVESTIGATION_DAILY_BUDGET` only after checking available Gemini quota. The
-current local value is zero; the Frankfurt Render Blueprint uses `sync: false`,
-so its secret value and provider quota are not visible in this repository.
-Generated result files are Git-ignored. Final metrics remain pending until an
-operator-approved live run completes. Exact quote validation is evidence
-presence, not proof of factual entailment.
+Before any final Gemini call, the CLI audits the fixed cases and local corpus,
+checks the exact Frankfurt project and corpus count, and verifies complete
+indexed evidence. Result, retrieval detail, and local rolling-24-hour budget
+files are Git-ignored. Completed investigations are checkpointed; an
+investigation with an uncertain in-flight reservation is not automatically
+retried. The evaluation budget affects only the local CLI, not Render. Metrics
+remain pending until the operator approves and completes a live run. Exact
+quote validation confirms text presence, not factual entailment. See
+[`reports/final_evaluation.md`](reports/final_evaluation.md) for the smoke
+record and metric methodology.
 
 ## Local setup (PowerShell, Python 3.11+)
 
