@@ -27,3 +27,4 @@ data/cache/
 /reports/.final_evaluation_budget.jsonl.lock
 /reports/.final_evaluation_budget_*.jsonl
 /reports/.final_evaluation_budget_*.jsonl.lock
+/reports/quality_dev_*_results.jsonl

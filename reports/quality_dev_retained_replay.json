@@ -1,0 +1,45 @@
+{
+  "baseline_result_sha256": "8b757fc769bacbc1e66ba4d22eaa464ea235b8546f8e920c516031ee2dcc949a",
+  "baseline_statuses_reproduced": 30,
+  "changed_statuses": [
+    {
+      "before": "insufficient",
+      "case_id": "quality-conflict-sealed-crates",
+      "retained": "conflicting"
+    },
+    {
+      "before": "insufficient",
+      "case_id": "quality-conflict-station-operator",
+      "retained": "conflicting"
+    }
+  ],
+  "new_gemini_requests": 0,
+  "retained_validator_sha256": "e589b58215c72783e5fbbb3c7dc4c5d083285d196473fa813bab79055921cc99",
+  "scope": "saved development drafts only; original baseline outputs reproduced before applying retained validator",
+  "summary": {
+    "all_false_conflicts": 0,
+    "api_requests": 0,
+    "citation_validity": 0.9782608695652174,
+    "completed": 30,
+    "conflict_correct": 5,
+    "conflict_denominator": 5,
+    "control_denominator": 5,
+    "correct_abstentions": 1,
+    "dev_answer_span_correct": 9,
+    "dev_denominator": 20,
+    "dev_support_references": 48,
+    "dev_support_references_found": 43,
+    "draft_citations": 46,
+    "error_cases": 0,
+    "false_conflicts_on_controls": 0,
+    "false_conflicts_on_dev": 0,
+    "median_seconds": 1.0750023648142815e-05,
+    "missing_evidence_denominator": 1,
+    "nonconflicting_denominator": 25,
+    "p95_seconds": 2.0600040443241596e-05,
+    "planned": 30,
+    "predicted_abstentions": 4,
+    "verified_citations": 45
+  },
+  "timing_scope": "local validator replay, not end-to-end investigation latency"
+}

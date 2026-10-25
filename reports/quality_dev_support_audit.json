@@ -1,0 +1,11 @@
+{
+  "corpus_sha256": "3dd75ba39fd8fe6842bf5cbc186da8457c7f3d90cba6cc6e98b44e63df7de0b6",
+  "eligible_questions": 20,
+  "questions": 20,
+  "questions_sha256": "05e4d4e5ad8e0c3e5f1b825a553b78d0ed5d84cfaa196e3bcf72ec6799ced324",
+  "source": "local corpus only; indexed database coverage is checked separately before live calls",
+  "support_references": 48,
+  "support_references_found": 48,
+  "unique_support_pairs": 48,
+  "unique_support_pairs_found": 48
+}

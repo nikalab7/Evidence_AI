@@ -1,0 +1,149 @@
+{
+  "baseline_commit": "ee9c9c11f90d3083917bea9bf92720ddab23939b",
+  "gemini_requests": 0,
+  "results": {
+    "after": {
+      "conflict_correct": 5,
+      "conflict_denominator": 5,
+      "control_denominator": 5,
+      "correct_controls": 5,
+      "false_conflicts": 0,
+      "median_validator_ms": 0.017900019884109497,
+      "retained_citations": 18,
+      "rows": [
+        {
+          "case_id": "quality-conflict-sealed-crates",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "conflicting"
+        },
+        {
+          "case_id": "quality-conflict-trail-access",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "conflicting"
+        },
+        {
+          "case_id": "quality-conflict-release-flag",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "conflicting"
+        },
+        {
+          "case_id": "quality-conflict-delivery-status",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "conflicting"
+        },
+        {
+          "case_id": "quality-conflict-station-operator",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "conflicting"
+        },
+        {
+          "case_id": "quality-control-times",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-versions",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-consistent",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-missing",
+          "citations_retained": 0,
+          "expected": "insufficient",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-control-partner",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        }
+      ]
+    },
+    "before": {
+      "conflict_correct": 0,
+      "conflict_denominator": 5,
+      "control_denominator": 5,
+      "correct_controls": 5,
+      "false_conflicts": 0,
+      "median_validator_ms": 0.01309998333454132,
+      "retained_citations": 18,
+      "rows": [
+        {
+          "case_id": "quality-conflict-sealed-crates",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-conflict-trail-access",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-conflict-release-flag",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-conflict-delivery-status",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-conflict-station-operator",
+          "citations_retained": 2,
+          "expected": "conflicting",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-control-times",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-versions",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-consistent",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        },
+        {
+          "case_id": "quality-control-missing",
+          "citations_retained": 0,
+          "expected": "insufficient",
+          "predicted": "insufficient"
+        },
+        {
+          "case_id": "quality-control-partner",
+          "citations_retained": 2,
+          "expected": "answered",
+          "predicted": "answered"
+        }
+      ]
+    }
+  },
+  "scope": "scripted response replay; tests validator acceptance, NOT model accuracy or retrieval"
+}

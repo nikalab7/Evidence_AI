@@ -1,0 +1,8 @@
+{
+  "apply_command": "git apply --unidiff-zero --ignore-space-change eval/quality_prompt_candidate.patch",
+  "live_candidate_run_fingerprint": "43e4cffe3b5ae98fe27a3ad2e0f83a2ef6fb21a04eaed2d29df22a97f727e22c",
+  "patch_applies_to": "retained Phase 7.4 source in an isolated checkout only",
+  "patch_sha256": "6e4d8a506780a63d339664bf53a25c638a7a1bb766cf8691325c828459b22bdc",
+  "reason": "No net central-claim span gain on 20 dev questions; partner-control central-claim score regression (answer retained its correct first premise); higher latency and request usage",
+  "selected_for_runtime": false
+}

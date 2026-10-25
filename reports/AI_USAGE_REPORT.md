@@ -373,3 +373,31 @@ Local planning and personal preparation notes are excluded from the repository.
   exact-quote presence from factual entailment. The complete local suite passed
   236 tests. No production data, schema, Render configuration, or deployment
   was changed. See `reports/final_evaluation.md` for measurements and limits.
+
+## Phase 7.4 targeted quality improvement - 2026-10-25
+
+- Codex assistance was used to audit the frozen final checkpoints, reproduce the
+  central-claim conflict rejection, and add private per-citation diagnostics.
+  Original rejected quote strings and conflict groups were not saved, so their
+  historical contents are explicitly left unknown. The DHL audit found a lost
+  business-partner relationship despite complete visible supporting evidence.
+- Twenty unchanged development questions and ten independent synthetic fixtures
+  were prepared. The operator separately approved 60 live investigations and up
+  to 300 Gemini requests. The comparison completed 60 investigations using 228
+  requests (109 baseline, 119 prompt candidate), with no quota or runtime errors.
+- The expanded prompt candidate improved conflict status scores from 3/5 to 5/5
+  but left the dev central-claim span score at 9/20, increased cost, and regressed
+  the partner control's central-claim score. The candidate was rejected and saved
+  as a reproducible patch; runtime generation prompts were restored.
+- The retained deterministic validator fix replayed all 30 saved baseline drafts,
+  first reproducing their original outputs, then changing only two unresolved
+  conflict statuses. Conflict recognition became 5/5 with no additional API
+  requests; the dev score, quotations and negative-control results were unchanged.
+  This replay is distinguished from a fresh live run of the retained build.
+- The final evaluation dataset, report and checkpoints remained unchanged.
+  No production records, schema or deployment were changed. The local rolling
+  ledger was preserved and the process-only budget override restored. See
+  `reports/phase7_4_quality_improvement.md` for results and limitations.
+- The complete local suite passed 267 tests, including identical generation
+  messages before/after the retained fix and strict handling of invalid central
+  claims, unknown sources, failed quotations and exhausted budgets.

@@ -141,6 +141,10 @@ def investigate(
             elif function.name == "get_document" and isinstance(result, dict):
                 timing["document_characters"] = len(result.get("full_text", ""))
             trace["tool_calls"].append(timing)
+            if capture_evaluation_details:
+                trace.setdefault("evaluation_tool_arguments", []).append({
+                    "step": tool_calls, "tool": function.name, "arguments": safe_args,
+                })
             function_response: dict[str, Any] = {"name": function.name, "response": result}
             if function.call_id:
                 function_response["id"] = function.call_id
@@ -195,7 +199,16 @@ def investigate(
     }
     trace["investigation_steps"] = tool_calls
     trace["generation_error"] = generation_error
-    verified = validate_final_response(final_draft or {}, retrieved)
+    validation: dict[str, Any] = {}
+    verified = validate_final_response(final_draft or {}, retrieved, diagnostics=validation)
+    quote_outcomes: dict[str, int] = {}
+    for check in validation.get("citation_checks", []):
+        outcome = check["outcome"]
+        quote_outcomes[outcome] = quote_outcomes.get(outcome, 0) + 1
+    trace["validation_diagnostic"] = {
+        key: value for key, value in validation.items() if key != "citation_checks"
+    }
+    trace["validation_diagnostic"]["quote_check_counts"] = quote_outcomes
     trace["validated_citations"] = sum(len(claim["citations"]) for claim in verified["claims"])
     trace["verified_claims"] = len(verified["claims"])
     trace["dropped_claims"] = len(verified["dropped_claim_ids"])
@@ -217,6 +230,8 @@ def investigate(
         diagnostic = "evidence_retrieved_but_not_cited"
     elif verified["dropped_claim_ids"]:
         diagnostic = "citation_rejected"
+    elif verified["status"] == "conflicting":
+        diagnostic = "citations_verified"
     elif verified["central_claim_id"] not in {
         claim["claim_id"] for claim in verified["claims"]
     }:
@@ -238,4 +253,6 @@ def investigate(
     }
     if capture_evaluation_details:
         trace["evaluation_retrieval_results"] = evaluation_retrieval_results
+        trace["evaluation_final_draft"] = final_draft
+        trace["evaluation_validation_details"] = validation
     return finish(verified, trace, started, model_name)

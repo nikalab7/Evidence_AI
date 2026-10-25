@@ -1,0 +1,43 @@
+--- a/app/llm/agent.py
++++ b/app/llm/agent.py
+@@ -12 +12 @@
+-from app.llm.agent_support import SYSTEM_PROMPT, add_usage, finish, record_requests, trace_arguments
++from app.llm.agent_support import FINAL_INSTRUCTIONS, SYSTEM_PROMPT, add_usage, finish, record_requests, trace_arguments
+@@ -155,7 +155 @@
+-        messages.append({"role": "user", "parts": [{"text": (
+-            "Return the final structured claims now. Use only the retrieved evidence "
+-            "above. Put every factual statement in a separately cited claim. Set "
+-            "central_claim_id to the main claim, or use an empty string when the "
+-            "evidence is insufficient. Include conflict_groups only for incompatible "
+-            "verified claims."
+-        )}]})
++        messages.append({"role": "user", "parts": [{"text": FINAL_INSTRUCTIONS}]})
+--- a/app/llm/agent_support.py
++++ b/app/llm/agent_support.py
+@@ -15,2 +15,2 @@
+-multiple documents. Usually one search is enough; search again only for a named,
+-unanswered hop and never repeat a broad query. Preserve exact document titles,
++multiple documents. Check each requested relationship and qualifier before stopping;
++search again for a named unanswered hop and never repeat a broad query. Preserve exact document titles,
+@@ -23 +23,20 @@
+-central claim so the application abstains."""
++central claim so the application abstains. Preserve who did what to whom: a fact
++about a person's partner or relative does not establish that fact about the person.
++Verify every premise of a multi-document conclusion and cite the needed sources.
++Copy quotes as contiguous source substrings, including punctuation; do not paraphrase,
++combine separated spans, or add ellipses inside a quote. Separate citations can
++support separate spans. For conflicting sources, cite both incompatible alternatives
++in conflict_groups; an unresolved winner is not the same as missing evidence.
++Different dates, versions, or scopes are not contradictions by themselves."""
++
++FINAL_INSTRUCTIONS = """Return the final structured claims using only retrieved evidence.
++Put each factual statement in a separately cited claim, using exact contiguous
++source quotes. Verify all relationships and qualifiers requested by the question.
++If evidence is missing, use an empty central_claim_id and no conflict_groups.
++If sources make incompatible assertions about the same fact, time, version and
++scope, cite both alternatives as separate claims and put their claim_ids in a
++conflict_group. You may use an empty central_claim_id when no winner can be
++resolved; do not invent a single winning conclusion. A conflict group requires
++at least two distinct claims with valid exact quotations. If the sources describe
++different times or versions, explain the distinction rather than grouping them.
++Otherwise set central_claim_id to the cited claim that answers the question."""

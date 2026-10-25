@@ -1,0 +1,36 @@
+{
+  "fixture_count": 10,
+  "fixtures_sha256": "59336eecda47c81071a857d44daf698a2a216f63ea700762c124601b1f8271e0",
+  "questions_sha256": "05e4d4e5ad8e0c3e5f1b825a553b78d0ed5d84cfaa196e3bcf72ec6799ced324",
+  "scope": "development only; original final cases are never read by this selector",
+  "seed": "evidenceai-phase7.4-v1",
+  "selected_ids": [
+    "5ae5d02855429929b08079b2",
+    "5adcdcd655429947343537b4",
+    "5a8dc02d554299441c6ba083",
+    "5ac487fa5542995c82c4ad59",
+    "5a8d142a554299653c1aa138",
+    "5a7a5aad5542996c55b2dd6c",
+    "5a74c65755429974ef308c5b",
+    "5a78eb0155429974737f78ff",
+    "5a7d1fe855429909bec7696c",
+    "5ab972805542996be20204f7",
+    "5a7eb9b95542994959419a6a",
+    "5ab3acd15542992ade7c6e17",
+    "5ab5b5c75542997d4ad1f1b7",
+    "5a7726b055429937353601f1",
+    "5a7daec95542991319bc93ed",
+    "5addda745542992200553b59",
+    "5a7dbfd95542990b8f503a6e",
+    "5a7b87385542995eb53be94d",
+    "5ac098f0554299294b219015",
+    "5a72232155429971e9dc92c8"
+  ],
+  "source": "eval/retrieval_dev.jsonl",
+  "source_sha256": "5401930220fca759ba637cc005d24c294330f177bf5eac7e525eac650c97eaec",
+  "strata_per_type": {
+    "easy": 4,
+    "hard": 3,
+    "medium": 3
+  }
+}

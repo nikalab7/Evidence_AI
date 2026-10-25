@@ -1,0 +1,32 @@
+{
+  "completed_this_run": 30,
+  "requests_this_run": 109,
+  "run_fingerprint": "07f591d3a8a02aad673e1ab50aba84e6499e0876a3db8ac585c5bc1d12a5c841",
+  "stop_reason": null,
+  "summary": {
+    "all_false_conflicts": 0,
+    "api_requests": 109,
+    "citation_validity": 0.9782608695652174,
+    "completed": 30,
+    "conflict_correct": 3,
+    "conflict_denominator": 5,
+    "control_denominator": 5,
+    "correct_abstentions": 1,
+    "dev_answer_span_correct": 9,
+    "dev_denominator": 20,
+    "dev_support_references": 48,
+    "dev_support_references_found": 43,
+    "draft_citations": 46,
+    "error_cases": 0,
+    "false_conflicts_on_controls": 0,
+    "false_conflicts_on_dev": 0,
+    "median_seconds": 4.1736256500007585,
+    "missing_evidence_denominator": 1,
+    "nonconflicting_denominator": 25,
+    "p95_seconds": 7.534485399955884,
+    "planned": 30,
+    "predicted_abstentions": 6,
+    "verified_citations": 45
+  },
+  "variant": "before"
+}

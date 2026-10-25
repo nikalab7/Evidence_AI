@@ -6,7 +6,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 Phase 0 through Phase 6B are implemented. The owner reports that Phase 6B migration `20261025133854` was applied to Frankfurt and verified with 50,000 documents, 50,018 sources, 50,000 chunks, and an empty `managed_uploads` table. The owner also reports that the semantic retrieval fix for replaced uploads has been deployed and answered the previously failing question with a verified citation; this workspace has not independently rechecked the live deployment. See [`reports/replacement_semantic_retrieval.md`](reports/replacement_semantic_retrieval.md) and [`reports/phase6b_2_activation.md`](reports/phase6b_2_activation.md). The latest capacity and retrieval evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md) and [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md).
 
-Phase 7 evaluation assets and the resumable runner are prepared. The 200-question retrieval development set remains separate. The held-out candidate pool was not used for tuning; 25 unchanged answerable cases were selected for the final set and have not been sent to Gemini. The 45-case set also includes single-hop, unanswerable, and fixture-only conflict cases. The full live answer evaluation is still pending; see [`reports/final_evaluation.md`](reports/final_evaluation.md).
+The original Phase 7 economical evaluation completed all 45 cases using 162 Gemini requests. Its frozen Semantic baseline scored 19/30 answerable cases by answer-span matching, 27/38 overall including correct abstentions, and 1/7 conflict fixtures. The separate 200-question development set supports subsequent quality improvements. See [`reports/final_evaluation.md`](reports/final_evaluation.md) for the original results and [`reports/phase7_4_quality_improvement.md`](reports/phase7_4_quality_improvement.md) for the independent development comparison.
 
 The single-service FastAPI application serves the investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
 
@@ -139,7 +139,8 @@ title/sentence references verified after reading 55 selected source/chunk rows.
 The one authorized development smoke used Semantic retrieval and consumed 3
 Gemini requests. It returned an answer in 5.261 seconds after one search tool
 call; one of its two drafted citations was rejected, so this is not a
-citation-clean accuracy result. No held-out final investigation has run.
+citation-clean accuracy result. The original final evaluation subsequently
+completed all 45 cases; its report and checkpoints are now frozen.
 
 Audit the cases and both run plans without database or Gemini access:
 
@@ -158,7 +159,8 @@ not answer-accuracy scores. The original 3-mode answer comparison remains
 available as `--comparison-plan full` and requires 121 investigations, up to
 605 Gemini requests.
 
-**Wait for separate operator approval before running the final evaluation.**
+**The original final evaluation is complete. Any later rerun requires separate
+operator approval and must be labeled a post-hoc regression comparison.**
 Immediately before approval, check current model/project quota in
 [Google AI Studio rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
 Quota varies by model, project, and tier; it was not accessible from this
@@ -180,11 +182,36 @@ checks the exact Frankfurt project and corpus count, and verifies complete
 indexed evidence. Result, retrieval detail, and local rolling-24-hour budget
 files are Git-ignored. Completed investigations are checkpointed; an
 investigation with an uncertain in-flight reservation is not automatically
-retried. The evaluation budget affects only the local CLI, not Render. Metrics
-remain pending until the operator approves and completes a live run. Exact
+retried. The evaluation budget affects only the local CLI, not Render. The
+original results are recorded without subsequent tuning. Exact
 quote validation confirms text presence, not factual entailment. See
 [`reports/final_evaluation.md`](reports/final_evaluation.md) for the smoke
 record and metric methodology.
+
+### Independent development quality comparison
+
+Phase 7.4 selects 20 unchanged questions only from `eval/retrieval_dev.jsonl`
+and adds five synthetic contradictions plus five controls. The input manifest
+records selection and file hashes. Fixture evidence is injected locally and is
+never added to Supabase. Run the local audit and scripted validator replay with:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.audit_quality_dev
+.\.venv\Scripts\python.exe -m scripts.evaluate_quality_dev
+.\.venv\Scripts\python.exe -m scripts.evaluate_quality_dev --plan
+```
+
+Scripted replay measures validator behavior with authored drafts. Actual model
+quality was measured in the approved 60-investigation comparison (228 Gemini
+requests). The expanded prompt candidate showed no net development answer-score
+gain and was removed. The retained fix handles fully cited unresolved conflicts;
+replaying all 30 saved baseline drafts improved conflict status handling from
+3/5 to 5/5 without extra API calls or other status changes. See the Phase 7.4
+report for the live candidate results, retained-fix replay, and limitations.
+Live runs use the same development cases, the existing rolling reservation ledger,
+separate Git-ignored result files, and a five-HTTP-request cap. Detailed
+draft/quotation diagnostics are local evaluation data and are excluded from
+public responses and logs. Original final results remain immutable.
 
 ## Local setup (PowerShell, Python 3.11+)
 

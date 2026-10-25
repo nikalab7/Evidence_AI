@@ -1,0 +1,584 @@
+[
+  {
+    "case_id": "quality-conflict-sealed-crates",
+    "category": "conflicting",
+    "execution_mode": "fixture",
+    "question": "How many sealed crates did Cedar depot hold at 08:00 UTC on 4 April 2026?",
+    "gold_answer": "",
+    "expected_status": "conflicting",
+    "supporting_evidence": [
+      {
+        "title": "quality-conflict-sealed-crates source 1",
+        "sentence": "At 08:00 UTC on 4 April 2026, Cedar depot held 18 sealed crates."
+      },
+      {
+        "title": "quality-conflict-sealed-crates source 2",
+        "sentence": "At 08:00 UTC on 4 April 2026, Cedar depot held 29 sealed crates."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-conflict-sealed-crates source 1",
+        "sentence": "At 08:00 UTC on 4 April 2026, Cedar depot held 18 sealed crates.",
+        "doc_id": "8fe6bb9fc8986cb5dc6db4ea2f569b1ed6f7df61579052945471865d9cb5da5e",
+        "chunk_id": "cd85a6e85d847d5d7999a7d88412406235a45638e5a63c6304356d8dddf87010",
+        "source_id": "ec6465ff5f858e83ba796ff484e653f3458f068e9f9b919e95396c002c9393ce"
+      },
+      {
+        "title": "quality-conflict-sealed-crates source 2",
+        "sentence": "At 08:00 UTC on 4 April 2026, Cedar depot held 29 sealed crates.",
+        "doc_id": "aed7208cf0dc1a35ff70bbd9e3d9e5b06048b808dba33c560d0edda3108d872d",
+        "chunk_id": "436f6d587d6f33b67a2f411706fb9e8f2b0f6efff813c8b50557640729ab5752",
+        "source_id": "616585491a4b5984a4b98e3141e267825ee8db3f8e868f4b501606b084590022"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "At 08:00 UTC on 4 April 2026, Cedar depot held 18 sealed crates.",
+          "citations": [
+            {
+              "chunk_id": "cd85a6e85d847d5d7999a7d88412406235a45638e5a63c6304356d8dddf87010",
+              "quote": "At 08:00 UTC on 4 April 2026, Cedar depot held 18 sealed crates."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "At 08:00 UTC on 4 April 2026, Cedar depot held 29 sealed crates.",
+          "citations": [
+            {
+              "chunk_id": "436f6d587d6f33b67a2f411706fb9e8f2b0f6efff813c8b50557640729ab5752",
+              "quote": "At 08:00 UTC on 4 April 2026, Cedar depot held 29 sealed crates."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": [
+        [
+          "c1",
+          "c2"
+        ]
+      ]
+    }
+  },
+  {
+    "case_id": "quality-conflict-trail-access",
+    "category": "conflicting",
+    "execution_mode": "fixture",
+    "question": "Was the Elm trail open at noon on 6 June 2026?",
+    "gold_answer": "",
+    "expected_status": "conflicting",
+    "supporting_evidence": [
+      {
+        "title": "quality-conflict-trail-access source 1",
+        "sentence": "At noon on 6 June 2026, the Elm trail was open to visitors."
+      },
+      {
+        "title": "quality-conflict-trail-access source 2",
+        "sentence": "At noon on 6 June 2026, the Elm trail was closed to visitors."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-conflict-trail-access source 1",
+        "sentence": "At noon on 6 June 2026, the Elm trail was open to visitors.",
+        "doc_id": "ece51a761795d57f49b80e1a60f1f1d37423034778daa4c7bc79ca46eb7a8df2",
+        "chunk_id": "f968bd6670f4991676cddb5720c27ee8ff41badde56aa7428e057b504c2190dd",
+        "source_id": "6b02adee1b2728abff90a725d51967cca823dca1c3b46fea9ac9dbc52f85d144"
+      },
+      {
+        "title": "quality-conflict-trail-access source 2",
+        "sentence": "At noon on 6 June 2026, the Elm trail was closed to visitors.",
+        "doc_id": "00e7a941e4e2d06bf8c65a2d863017d61968d359ddf34e0e861f9567c33b863b",
+        "chunk_id": "1ca7a851a10946569714c68dd6a461be53550cf89f9e3931c3877b4ced043811",
+        "source_id": "ea1fe4f018d36784793ac8961f924c11adc52aa200e1fe8b908aee20c19e7b63"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "At noon on 6 June 2026, the Elm trail was open to visitors.",
+          "citations": [
+            {
+              "chunk_id": "f968bd6670f4991676cddb5720c27ee8ff41badde56aa7428e057b504c2190dd",
+              "quote": "At noon on 6 June 2026, the Elm trail was open to visitors."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "At noon on 6 June 2026, the Elm trail was closed to visitors.",
+          "citations": [
+            {
+              "chunk_id": "1ca7a851a10946569714c68dd6a461be53550cf89f9e3931c3877b4ced043811",
+              "quote": "At noon on 6 June 2026, the Elm trail was closed to visitors."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": [
+        [
+          "c1",
+          "c2"
+        ]
+      ]
+    }
+  },
+  {
+    "case_id": "quality-conflict-release-flag",
+    "category": "conflicting",
+    "execution_mode": "fixture",
+    "question": "Was the Orion checksum flag enabled in release 42 in staging?",
+    "gold_answer": "",
+    "expected_status": "conflicting",
+    "supporting_evidence": [
+      {
+        "title": "quality-conflict-release-flag source 1",
+        "sentence": "In release 42 in staging, the Orion checksum flag was enabled."
+      },
+      {
+        "title": "quality-conflict-release-flag source 2",
+        "sentence": "In release 42 in staging, the Orion checksum flag was disabled."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-conflict-release-flag source 1",
+        "sentence": "In release 42 in staging, the Orion checksum flag was enabled.",
+        "doc_id": "71f49fae7febbe6a873e9e7a105fd6f4b64e8a6e67bf2a70aab7472d5d8f965d",
+        "chunk_id": "e4bfe09f53c22928adf53d41abea21a378d5314c19f774982333e2b50cfceaf6",
+        "source_id": "646628d177ca088a9da0fc14a0339c014528e4d448985d9206635d3d9b2a7607"
+      },
+      {
+        "title": "quality-conflict-release-flag source 2",
+        "sentence": "In release 42 in staging, the Orion checksum flag was disabled.",
+        "doc_id": "786beaf108e7fd46340b8c4a3b6ab659b081ef0950216df7d990c48665a9d2e9",
+        "chunk_id": "5e11e3276231241a61b957bfaad1c172d3a0d09866130855dc66206bcd36606e",
+        "source_id": "ffc35514b17b33d33d958b5c3056d399aee6564ac70d28a377b8dc25ae963dcd"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "In release 42 in staging, the Orion checksum flag was enabled.",
+          "citations": [
+            {
+              "chunk_id": "e4bfe09f53c22928adf53d41abea21a378d5314c19f774982333e2b50cfceaf6",
+              "quote": "In release 42 in staging, the Orion checksum flag was enabled."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "In release 42 in staging, the Orion checksum flag was disabled.",
+          "citations": [
+            {
+              "chunk_id": "5e11e3276231241a61b957bfaad1c172d3a0d09866130855dc66206bcd36606e",
+              "quote": "In release 42 in staging, the Orion checksum flag was disabled."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": [
+        [
+          "c1",
+          "c2"
+        ]
+      ]
+    }
+  },
+  {
+    "case_id": "quality-conflict-delivery-status",
+    "category": "conflicting",
+    "execution_mode": "fixture",
+    "question": "Had parcel QX-184 reached Birch station by 15:00 UTC on 9 July 2026?",
+    "gold_answer": "",
+    "expected_status": "conflicting",
+    "supporting_evidence": [
+      {
+        "title": "quality-conflict-delivery-status source 1",
+        "sentence": "Parcel QX-184 had reached Birch station by 15:00 UTC on 9 July 2026."
+      },
+      {
+        "title": "quality-conflict-delivery-status source 2",
+        "sentence": "Parcel QX-184 had not reached Birch station by 15:00 UTC on 9 July 2026."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-conflict-delivery-status source 1",
+        "sentence": "Parcel QX-184 had reached Birch station by 15:00 UTC on 9 July 2026.",
+        "doc_id": "f57819e7cf38389ffa5f168e4331f74e8da697015c56a28efd7f2e045f1bf786",
+        "chunk_id": "914e6d5935dfa8d1e5ae979c33c6e7db19bf64ca485fd94b72fe239656f6b0d6",
+        "source_id": "04a110a51d0e94433a2eab5b522c487376c6436778f2511f2a0ccd97a85088e4"
+      },
+      {
+        "title": "quality-conflict-delivery-status source 2",
+        "sentence": "Parcel QX-184 had not reached Birch station by 15:00 UTC on 9 July 2026.",
+        "doc_id": "ee22d00959278bae1bf0accee83fa880eea86a965f1b77a495f293e2e58129a9",
+        "chunk_id": "096006b92722a4de9e98f6355deadad2be200c18d0b66d15d6b6fede6d051dcd",
+        "source_id": "b270b79035ce6e861d5789c2493468b3662aa4449cc17f4138c4c7049f8b3607"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "Parcel QX-184 had reached Birch station by 15:00 UTC on 9 July 2026.",
+          "citations": [
+            {
+              "chunk_id": "914e6d5935dfa8d1e5ae979c33c6e7db19bf64ca485fd94b72fe239656f6b0d6",
+              "quote": "Parcel QX-184 had reached Birch station by 15:00 UTC on 9 July 2026."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "Parcel QX-184 had not reached Birch station by 15:00 UTC on 9 July 2026.",
+          "citations": [
+            {
+              "chunk_id": "096006b92722a4de9e98f6355deadad2be200c18d0b66d15d6b6fede6d051dcd",
+              "quote": "Parcel QX-184 had not reached Birch station by 15:00 UTC on 9 July 2026."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": [
+        [
+          "c1",
+          "c2"
+        ]
+      ]
+    }
+  },
+  {
+    "case_id": "quality-conflict-station-operator",
+    "category": "conflicting",
+    "execution_mode": "fixture",
+    "question": "Who was the sole operator of Alder station on 1 May 2026?",
+    "gold_answer": "",
+    "expected_status": "conflicting",
+    "supporting_evidence": [
+      {
+        "title": "quality-conflict-station-operator source 1",
+        "sentence": "On 1 May 2026, Lumen Works was the sole operator of Alder station."
+      },
+      {
+        "title": "quality-conflict-station-operator source 2",
+        "sentence": "On 1 May 2026, North Reed was the sole operator of Alder station."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-conflict-station-operator source 1",
+        "sentence": "On 1 May 2026, Lumen Works was the sole operator of Alder station.",
+        "doc_id": "572da842a9943ae645311b45963f4448c13ea282b9d1945cf6d86789a1cd9063",
+        "chunk_id": "a3a235e4c6c205c82c5d1cd2a60340fbe5dafcb8f44bd9228879305eb479d64c",
+        "source_id": "71f008925dce575a008bf4452c9a93e6a4f0aabd8e928d4c5dd8ceb45cd470e1"
+      },
+      {
+        "title": "quality-conflict-station-operator source 2",
+        "sentence": "On 1 May 2026, North Reed was the sole operator of Alder station.",
+        "doc_id": "32ddfa830a0d83dcee0f772fd5c0fb7e14bf47aa3713751abf933ea3bbebe576",
+        "chunk_id": "6ee5c029d31374742c6306d43d67ea0400a414d844495fd10b43cdc7b02b06cc",
+        "source_id": "a76d85b1e228cde1ce583fb2a938ea43ef075c7cb14c5d4464fef8ab523e49ff"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "On 1 May 2026, Lumen Works was the sole operator of Alder station.",
+          "citations": [
+            {
+              "chunk_id": "a3a235e4c6c205c82c5d1cd2a60340fbe5dafcb8f44bd9228879305eb479d64c",
+              "quote": "On 1 May 2026, Lumen Works was the sole operator of Alder station."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "On 1 May 2026, North Reed was the sole operator of Alder station.",
+          "citations": [
+            {
+              "chunk_id": "6ee5c029d31374742c6306d43d67ea0400a414d844495fd10b43cdc7b02b06cc",
+              "quote": "On 1 May 2026, North Reed was the sole operator of Alder station."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": [
+        [
+          "c1",
+          "c2"
+        ]
+      ]
+    }
+  },
+  {
+    "case_id": "quality-control-times",
+    "category": "different_times",
+    "execution_mode": "fixture",
+    "question": "How many sensors did Pine station have on 2 February 2026?",
+    "gold_answer": "9",
+    "expected_status": "answered",
+    "supporting_evidence": [
+      {
+        "title": "quality-control-times source 1",
+        "sentence": "On 1 January 2026, Pine station had 7 sensors."
+      },
+      {
+        "title": "quality-control-times source 2",
+        "sentence": "On 2 February 2026, Pine station had 9 sensors."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-control-times source 1",
+        "sentence": "On 1 January 2026, Pine station had 7 sensors.",
+        "doc_id": "c186dc6747f02423033abdf8b159654b141cc1ec976b7a14f368145d910debb4",
+        "chunk_id": "19a4ebcb7edebf0fe24990a0ef537f0a424758881308a512afdb4f81434aa9c1",
+        "source_id": "f960445f8dfa15badd8300e8a8ae91e5cae7bcc797659330200f38c88404cd84"
+      },
+      {
+        "title": "quality-control-times source 2",
+        "sentence": "On 2 February 2026, Pine station had 9 sensors.",
+        "doc_id": "6e5ed0b39bcb4f5ffea13ad6d9faf7a1bb42c9e16c06dd1c9f59086bdef375fb",
+        "chunk_id": "f5ff6a5b48e4c72983fef7c46fddc854bc5036669c0221356bcb162f7dd96328",
+        "source_id": "461a3ac876ba01a288914f446bfa8f5cc3573e019b6b99f5fcc157d2656fbde5"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "c2",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "On 1 January 2026, Pine station had 7 sensors.",
+          "citations": [
+            {
+              "chunk_id": "19a4ebcb7edebf0fe24990a0ef537f0a424758881308a512afdb4f81434aa9c1",
+              "quote": "On 1 January 2026, Pine station had 7 sensors."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "On 2 February 2026, Pine station had 9 sensors.",
+          "citations": [
+            {
+              "chunk_id": "f5ff6a5b48e4c72983fef7c46fddc854bc5036669c0221356bcb162f7dd96328",
+              "quote": "On 2 February 2026, Pine station had 9 sensors."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": []
+    }
+  },
+  {
+    "case_id": "quality-control-versions",
+    "category": "different_versions",
+    "execution_mode": "fixture",
+    "question": "What is the retry limit in Quartz protocol version 2?",
+    "gold_answer": "16",
+    "expected_status": "answered",
+    "supporting_evidence": [
+      {
+        "title": "quality-control-versions source 1",
+        "sentence": "Quartz protocol version 1 sets the retry limit to 8."
+      },
+      {
+        "title": "quality-control-versions source 2",
+        "sentence": "Quartz protocol version 2 sets the retry limit to 16."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-control-versions source 1",
+        "sentence": "Quartz protocol version 1 sets the retry limit to 8.",
+        "doc_id": "4511e0ce593652f11778e66c1c72dd622711a807f72ddfc4faea55f69cdd96ba",
+        "chunk_id": "dff4cada60ec2c3df8d8e9a8c85d7f1aae342cacb276e5dd95312d5f4135135f",
+        "source_id": "66c7abe9f16141436b02a7aeff807f0062053f83f2de81e104dae12715672ce7"
+      },
+      {
+        "title": "quality-control-versions source 2",
+        "sentence": "Quartz protocol version 2 sets the retry limit to 16.",
+        "doc_id": "af718c4174a3ac557ab3f64c61a128f8cc74b90393040ebdf197dbf7c1f25236",
+        "chunk_id": "e12f8b1877d99d67b68ffe5ea02fcb2d72061c623123b2bc8cfc4dce4325c649",
+        "source_id": "e4e8c6decdb60e2000e0f811f49ce2a2ed6cbbd88c8a0f79fc25f85e11aa2ca2"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "c2",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "Quartz protocol version 1 sets the retry limit to 8.",
+          "citations": [
+            {
+              "chunk_id": "dff4cada60ec2c3df8d8e9a8c85d7f1aae342cacb276e5dd95312d5f4135135f",
+              "quote": "Quartz protocol version 1 sets the retry limit to 8."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "Quartz protocol version 2 sets the retry limit to 16.",
+          "citations": [
+            {
+              "chunk_id": "e12f8b1877d99d67b68ffe5ea02fcb2d72061c623123b2bc8cfc4dce4325c649",
+              "quote": "Quartz protocol version 2 sets the retry limit to 16."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": []
+    }
+  },
+  {
+    "case_id": "quality-control-consistent",
+    "category": "consistent",
+    "execution_mode": "fixture",
+    "question": "How many public entrances does Rowan gallery have?",
+    "gold_answer": "3",
+    "expected_status": "answered",
+    "supporting_evidence": [
+      {
+        "title": "quality-control-consistent source 1",
+        "sentence": "Rowan gallery has 3 public entrances."
+      },
+      {
+        "title": "quality-control-consistent source 2",
+        "sentence": "The visitor guide confirms that Rowan gallery has 3 public entrances."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-control-consistent source 1",
+        "sentence": "Rowan gallery has 3 public entrances.",
+        "doc_id": "2ce62d23777199851c5fa0da6c0024fe80c1811933ffaf6fe71baa87eb8e8886",
+        "chunk_id": "ddc2e5f1acb3513f90d3a37df6d0aae05d35bbce5a1a3c98a62858fbf4415fa3",
+        "source_id": "492d1f27dd89abc596fa2960bd22599b019e9fb5f114a5ec6cf1b4772191cd3d"
+      },
+      {
+        "title": "quality-control-consistent source 2",
+        "sentence": "The visitor guide confirms that Rowan gallery has 3 public entrances.",
+        "doc_id": "1ee7bb49090c5a3ca5942456e5cf4a9b0fca9c7c6e1bc603fd8db6c95f5f3744",
+        "chunk_id": "3b1774198726b114df614ec4f56a5a75ddb59b768186ee8dc289fc277b02690b",
+        "source_id": "1f13ac58c3cb2759b450e6781aa84f5efc7686c7881e6eed66422551539a1f58"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "c1",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "Rowan gallery has 3 public entrances.",
+          "citations": [
+            {
+              "chunk_id": "ddc2e5f1acb3513f90d3a37df6d0aae05d35bbce5a1a3c98a62858fbf4415fa3",
+              "quote": "Rowan gallery has 3 public entrances."
+            }
+          ]
+        },
+        {
+          "claim_id": "c2",
+          "text": "The visitor guide confirms that Rowan gallery has 3 public entrances.",
+          "citations": [
+            {
+              "chunk_id": "3b1774198726b114df614ec4f56a5a75ddb59b768186ee8dc289fc277b02690b",
+              "quote": "The visitor guide confirms that Rowan gallery has 3 public entrances."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": []
+    }
+  },
+  {
+    "case_id": "quality-control-missing",
+    "category": "unanswerable",
+    "execution_mode": "fixture",
+    "question": "Who designed the unrecorded Hazel beacon?",
+    "gold_answer": "",
+    "expected_status": "insufficient",
+    "supporting_evidence": [],
+    "fixture_evidence": [
+      {
+        "title": "quality-control-missing source 1",
+        "sentence": "The Hazel beacon is located on a coastal ridge.",
+        "doc_id": "cb6a0793b750f81af593ee45ba421cfa086cc4a6a9ee22aee78f356f6133856f",
+        "chunk_id": "fdbc2c9ff1f587061cc18f8b8578213565781f7a7e03608f9497b04d6c50cdcc",
+        "source_id": "f125693c0669440d6346e67b296f59155f5bdd2947600ccebcab1585d4d3e53a"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "",
+      "claims": [],
+      "conflict_groups": []
+    }
+  },
+  {
+    "case_id": "quality-control-partner",
+    "category": "multi_hop",
+    "execution_mode": "fixture",
+    "question": "Which founder had a business partner whose child won the Meridian Prize in 2024?",
+    "gold_answer": "Neri",
+    "expected_status": "answered",
+    "supporting_evidence": [
+      {
+        "title": "quality-control-partner source 1",
+        "sentence": "Neri co-founded Kestrel Labs with business partner Olin."
+      },
+      {
+        "title": "quality-control-partner source 2",
+        "sentence": "Olin's child Mira won the Meridian Prize in 2024."
+      }
+    ],
+    "fixture_evidence": [
+      {
+        "title": "quality-control-partner source 1",
+        "sentence": "Neri co-founded Kestrel Labs with business partner Olin.",
+        "doc_id": "0120fca2fa0fec24b4a7ae698a77cc2a3b02baf56111debb9045bdf41a9241a6",
+        "chunk_id": "779b4a47d420917798e868f13ddad036a239eb4e398c86e3a903246ce60f971a",
+        "source_id": "0c7684c4111f733fe71cb3b6e35f1a2c84422e01557ad69c71e7d4d7ce8ede42"
+      },
+      {
+        "title": "quality-control-partner source 2",
+        "sentence": "Olin's child Mira won the Meridian Prize in 2024.",
+        "doc_id": "c2bd346a1b073983da6afa44fb621cb31be11ad6a6c07b3faf58d33149ec1e3d",
+        "chunk_id": "0b0b680c40f563d95819b34d89a985f75ebb2c46999ea834e451b1a36ffa8ac6",
+        "source_id": "cbfa01b699a3d43ffe5df29c168a055585ccf265e6fdec0bce88fbfb56a5bcd4"
+      }
+    ],
+    "replay_draft": {
+      "central_claim_id": "c1",
+      "claims": [
+        {
+          "claim_id": "c1",
+          "text": "Neri is the founder whose business partner's child won the Meridian Prize in 2024.",
+          "citations": [
+            {
+              "chunk_id": "779b4a47d420917798e868f13ddad036a239eb4e398c86e3a903246ce60f971a",
+              "quote": "Neri co-founded Kestrel Labs with business partner Olin."
+            },
+            {
+              "chunk_id": "0b0b680c40f563d95819b34d89a985f75ebb2c46999ea834e451b1a36ffa8ac6",
+              "quote": "Olin's child Mira won the Meridian Prize in 2024."
+            }
+          ]
+        }
+      ],
+      "conflict_groups": []
+    }
+  }
+]

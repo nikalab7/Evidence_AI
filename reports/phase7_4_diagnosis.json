@@ -1,0 +1,190 @@
+{
+  "abstention_causes": {
+    "citation_rejection": 2,
+    "model_abstention_with_complete_support": 2,
+    "retrieval_miss": 1
+  },
+  "citation_loss_cases": [
+    {
+      "case_id": "hotpotqa-5a8109535542995ce29dcba2",
+      "draft": 2,
+      "exact_failure_reason": "not_recoverable_from_saved_checkpoint",
+      "retained": 0,
+      "withheld_with_claim": 2
+    },
+    {
+      "case_id": "hotpotqa-5ac450345542995c82c4ad2b",
+      "draft": 2,
+      "exact_failure_reason": "not_recoverable_from_saved_checkpoint",
+      "retained": 1,
+      "withheld_with_claim": 1
+    },
+    {
+      "case_id": "hotpotqa-5a85a4d75542994c784ddb2f",
+      "draft": 4,
+      "exact_failure_reason": "not_recoverable_from_saved_checkpoint",
+      "retained": 0,
+      "withheld_with_claim": 4
+    }
+  ],
+  "conflicts": [
+    {
+      "case_id": "conflict-01",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-02",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 3,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-03",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-04",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "citations_verified",
+      "predicted_status": "conflicting",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-05",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-06",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    },
+    {
+      "case_id": "conflict-07",
+      "draft_citation_count": 2,
+      "evidence_diagnostic": "central_claim_unverified",
+      "predicted_status": "insufficient",
+      "supporting_evidence_coverage": {
+        "coverage": 1.0,
+        "missing_support": [],
+        "support_references": 2,
+        "support_references_retrieved": 2
+      },
+      "tool_call_count": 1,
+      "verified_citation_count": 2
+    }
+  ],
+  "dhl": {
+    "cited_titles": [
+      "Adrian Dalsey"
+    ],
+    "coverage": {
+      "coverage": 1.0,
+      "missing_support": [],
+      "support_references": 5,
+      "support_references_retrieved": 5
+    },
+    "expected": "Larry Hillblom",
+    "finding": "answer omitted the business-partner relation and selected the parent instead",
+    "predicted": "The co-founder of DHL whose son was convicted of manslaughter is Adrian Dalsey."
+  },
+  "diagnostic_limits": [
+    "Original draft conflict_groups, central_claim_id and rejected quotations were not saved.",
+    "All six failed conflicts reached central_claim_unverified after both claims passed quotes.",
+    "Group generation cannot be confirmed retrospectively; the validator exited before checking groups.",
+    "Seven withheld citations across three atomic claims are not seven individually proven bad quotes.",
+    "Paraphrase, attribution, truncation and fabricated IDs cannot be distinguished for those lost quotes."
+  ],
+  "frozen_files": {
+    "eval/final_answer_eval.jsonl": "d2663d7a8deaf573d8eaac508296a35dacbd4ea43512986a2b34b6ce9c0c0f5e",
+    "eval/final_answer_eval_manifest.json": "3e2e4f3da135402b10047f1f9dfffdff68d9ba5eab12a6e95e3f8066264a3366",
+    "reports/final_evaluation.md": "0c0e0c24555cc38f0692251a825accb56eb4abe4f1580d8c8182335919a08613",
+    "reports/final_evaluation_results.jsonl": "5393051b7df253a3a07d2fba8899e89d77ef756ace4519ead47149842c58c012",
+    "reports/final_retrieval_comparison.json": "cee709696f2f9026a7cb60a89c083f6268554eb9349cf9a9efb6842128a4a389"
+  },
+  "incorrect_abstentions": [
+    {
+      "case_id": "hotpotqa-5a8109535542995ce29dcba2",
+      "coverage": 1.0,
+      "outcome": "citation_rejected",
+      "reason": "citation_rejection"
+    },
+    {
+      "case_id": "hotpotqa-5a8d54b055429941ae14dfa7",
+      "coverage": 0.0,
+      "outcome": "model_abstained",
+      "reason": "retrieval_miss"
+    },
+    {
+      "case_id": "hotpotqa-5ae18f005542997283cd222c",
+      "coverage": 1.0,
+      "outcome": "model_abstained",
+      "reason": "model_abstention_with_complete_support"
+    },
+    {
+      "case_id": "hotpotqa-5a85a4d75542994c784ddb2f",
+      "coverage": 1.0,
+      "outcome": "citation_rejected",
+      "reason": "citation_rejection"
+    },
+    {
+      "case_id": "hotpotqa-5ab9703c55429970cfb8eaee",
+      "coverage": 1.0,
+      "outcome": "model_abstained",
+      "reason": "model_abstention_with_complete_support"
+    }
+  ]
+}

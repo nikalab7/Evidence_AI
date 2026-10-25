@@ -1,0 +1,12 @@
+{
+  "answerable_cases": 20,
+  "database_access": "read_only_autocommit; no writes performed",
+  "eligible_cases": 20,
+  "excluded_cases": [],
+  "indexed_documents": 50000,
+  "project_ref": "nldnpqhqrfwjgxcqeuru",
+  "selected_source_chunk_rows_read": 40,
+  "supporting_sentence_coverage": 1.0,
+  "supporting_sentence_references": 48,
+  "supporting_sentence_references_found": 48
+}
