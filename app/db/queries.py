@@ -504,26 +504,90 @@ def keyword_search_chunks(
     limit: int = 10,
     filters: Mapping[str, str] | None = None,
     include_validation_source: bool = False,
+    strategy: str = "or",
+    common_term_threshold: float = 0.05,
 ) -> list[dict[str, Any]]:
-    """Run English FTS with an OR of PostgreSQL-normalized query lexemes."""
+    """Run English OR FTS, optionally filtering only corpus-common query terms."""
     if not isinstance(query, str):
         raise ValueError("search query must be a string")
     if not 1 <= limit <= 100:
         raise ValueError("retrieval limit must be between 1 and 100")
+    if strategy not in {"or", "informative"}:
+        raise ValueError("keyword strategy must be 'or' or 'informative'")
+    try:
+        common_term_threshold = float(common_term_threshold)
+    except (TypeError, ValueError):
+        raise ValueError("common-term threshold must be between 0 and 1") from None
+    if not math.isfinite(common_term_threshold) or not 0 <= common_term_threshold <= 1:
+        raise ValueError("common-term threshold must be between 0 and 1")
     if not query.strip():
         return []
     filter_sql, filter_values = _retrieval_filter_sql(filters)
     validation_fields = sql.SQL(", d.full_text, c.start_char, c.end_char") if include_validation_source else sql.SQL("")
+    if strategy == "or":
+        term_ctes = sql.SQL(
+            """input_lexemes AS (
+                   SELECT unnest(
+                       tsvector_to_array(to_tsvector('english'::regconfig, %s))
+                   ) AS lexeme
+               ), query_terms AS (
+                   SELECT row_number() OVER (ORDER BY lexeme)::integer AS term_number,
+                          plainto_tsquery('english'::regconfig, lexeme) AS term_query
+                   FROM input_lexemes
+               )"""
+        )
+        term_values: tuple[Any, ...] = (query,)
+    else:
+        from app.retrieval.keywords import protected_query_text
+
+        term_ctes = sql.SQL(
+            """fts_statistics AS MATERIALIZED (
+                   SELECT array_to_json(most_common_elems) AS common_lexemes,
+                          array_to_json(most_common_elem_freqs) AS common_frequencies
+                   FROM pg_stats
+                   WHERE schemaname = 'public' AND tablename = 'chunks' AND attname = 'tsv'
+               ), common_term_frequencies AS MATERIALIZED (
+                   SELECT term.value AS lexeme,
+                          frequency.value::double precision AS document_frequency
+                   FROM fts_statistics
+                   CROSS JOIN LATERAL json_array_elements_text(common_lexemes)
+                        WITH ORDINALITY AS term(value, term_position)
+                   JOIN LATERAL json_array_elements_text(common_frequencies)
+                        WITH ORDINALITY AS frequency(value, term_position) USING (term_position)
+               ), input_lexemes AS (
+                   SELECT unnest(
+                       tsvector_to_array(to_tsvector('english'::regconfig, %s))
+                   ) AS lexeme
+               ), protected_lexemes AS (
+                   SELECT unnest(
+                       tsvector_to_array(to_tsvector('english'::regconfig, %s))
+                   ) AS lexeme
+               ), classified_lexemes AS (
+                   SELECT input.lexeme,
+                          EXISTS (
+                              SELECT 1 FROM protected_lexemes AS protected
+                              WHERE protected.lexeme = input.lexeme
+                          ) AS is_protected,
+                          COALESCE(common.document_frequency, 0.0) AS document_frequency
+                   FROM input_lexemes AS input
+                   LEFT JOIN common_term_frequencies AS common USING (lexeme)
+               ), retained_lexemes AS MATERIALIZED (
+                   SELECT lexeme FROM classified_lexemes
+                   WHERE is_protected OR document_frequency < %s
+               ), selected_lexemes AS (
+                   SELECT lexeme FROM retained_lexemes
+                   UNION ALL
+                   SELECT input.lexeme FROM input_lexemes AS input
+                   WHERE NOT EXISTS (SELECT 1 FROM retained_lexemes)
+               ), query_terms AS (
+                   SELECT row_number() OVER (ORDER BY lexeme)::integer AS term_number,
+                          plainto_tsquery('english'::regconfig, lexeme) AS term_query
+                   FROM selected_lexemes
+               )"""
+        )
+        term_values = (query, protected_query_text(query), common_term_threshold)
     statement = sql.SQL(
-        """WITH RECURSIVE input_lexemes AS (
-               SELECT unnest(
-                   tsvector_to_array(to_tsvector('english'::regconfig, %s))
-               ) AS lexeme
-           ), query_terms AS (
-               SELECT row_number() OVER (ORDER BY lexeme)::integer AS term_number,
-                      plainto_tsquery('english'::regconfig, lexeme) AS term_query
-               FROM input_lexemes
-           ), query_fold(term_number, tsquery) AS (
+        """WITH RECURSIVE {}, query_fold(term_number, tsquery) AS (
                SELECT term_number, term_query
                FROM query_terms WHERE term_number = 1
                UNION ALL
@@ -555,8 +619,8 @@ def keyword_search_chunks(
            WHERE c.tsv @@ q.tsquery AND {}
            ORDER BY keyword_score DESC, c.chunk_id
            LIMIT %s"""
-    ).format(validation_fields, filter_sql)
-    rows = conn.execute(statement, (query, *filter_values, limit)).fetchall()
+    ).format(term_ctes, validation_fields, filter_sql)
+    rows = conn.execute(statement, (*term_values, *filter_values, limit)).fetchall()
     return _search_result_rows(rows, "keyword_score")
 
 

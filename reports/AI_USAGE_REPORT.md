@@ -142,3 +142,9 @@ Local planning and personal preparation notes are excluded from the repository.
   zero-insert rerun remains unexplained. Supabase physical disk usage was not
   measured through the dashboard; the report labels the WAL/headroom result as
   an SQL-based estimate.
+
+## Phase 6A addition - 2026-10-25
+
+- Codex assistance was used to diagnose PostgreSQL full-text retrieval latency, implement a backward-compatible informative-term keyword strategy, and build a repeatable development-set tuning runner. The project owner specified the candidate approaches, dataset boundary, and evaluation requirements.
+- SQL diagnosis, threshold selection, and the eight-configuration RRF comparison used only the 200-question `eval/retrieval_dev.jsonl` development set. The held-out candidate file was not opened or used. Database benchmarking was read-only against Frankfurt; no schema or index changes were made.
+- The measured 0.05 informative-term cutoff improved keyword Recall@10 to 0.455 on the development set. Semantic-only remained the recommended default based on higher Recall@10/MRR and lower latency than positive-keyword hybrid variants. Results and limitations are in `reports/retrieval_tuning_50k.md`.

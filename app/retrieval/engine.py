@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import Any, Literal
 
 from app.retrieval.keyword import retrieve_keyword
+from app.retrieval.keywords import DEFAULT_COMMON_TERM_THRESHOLD, KeywordStrategy
 from app.retrieval.ranker import weighted_rrf
 from app.retrieval.semantic import retrieve_semantic
 
@@ -67,6 +68,8 @@ def search(
     timings: dict[str, float] | None = None,
     include_evidence_text: bool = False,
     include_validation_source: bool = False,
+    keyword_strategy: KeywordStrategy = "or",
+    common_term_threshold: float = DEFAULT_COMMON_TERM_THRESHOLD,
 ) -> list[dict[str, Any]]:
     """Retrieve stable, provenance-aware chunk results with one ranked API."""
     if mode not in ("semantic", "keyword", "hybrid"):
@@ -105,6 +108,8 @@ def search(
         hits = retrieve_keyword(
             conn, query, limit=limit, filters=filters, timings=timings,
             include_validation_source=include_validation_source,
+            strategy=keyword_strategy,
+            common_term_threshold=common_term_threshold,
         )
         if timings is not None:
             timings["retrieval_processing_seconds"] = perf_counter() - retrieval_started
@@ -121,6 +126,8 @@ def search(
     keyword_hits = retrieve_keyword(
         conn, query, limit=candidate_limit, filters=filters, timings=timings,
         include_validation_source=include_validation_source,
+        strategy=keyword_strategy,
+        common_term_threshold=common_term_threshold,
     )
     fusion_started = perf_counter()
     hits = weighted_rrf(
