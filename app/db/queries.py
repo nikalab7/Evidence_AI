@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from psycopg import Connection, sql
@@ -11,6 +12,8 @@ from psycopg.types.json import Jsonb
 
 
 TARGET_TABLES = ("documents", "document_sources", "chunks")
+MANAGED_UPLOADS_TABLE = "managed_uploads"
+APPROVED_PUBLIC_TABLES = frozenset((*TARGET_TABLES, MANAGED_UPLOADS_TABLE))
 
 DOCUMENTS_UPSERT_SQL = """
 INSERT INTO public.documents (doc_id, content_hash, full_text, metadata)
@@ -80,12 +83,10 @@ def apply_schema(conn: Connection, schema_sql: str) -> None:
         """SELECT table_name FROM information_schema.tables
            WHERE table_schema = 'public' ORDER BY table_name"""
     ).fetchall()
-    unexpected = {row[0] for row in public_relations} - set(TARGET_TABLES)
-    if unexpected:
-        raise RuntimeError(
-            "public schema contains unexpected tables; refusing schema changes: "
-            + ", ".join(sorted(unexpected))
-        )
+    relation_names = {row[0] for row in public_relations}
+    has_managed_uploads = validate_approved_public_relations(relation_names)
+    if has_managed_uploads:
+        verify_managed_uploads_schema(conn, require_empty=True)
     can_create = conn.execute(
         "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
     ).fetchone()[0]
@@ -94,6 +95,15 @@ def apply_schema(conn: Connection, schema_sql: str) -> None:
     _check_existing_tables(conn)
     conn.execute(schema_sql)
     _check_existing_tables(conn, require_all=True)
+    relations_after = conn.execute(
+        """SELECT table_name FROM information_schema.tables
+           WHERE table_schema = 'public' ORDER BY table_name"""
+    ).fetchall()
+    has_managed_uploads_after = validate_approved_public_relations(
+        {row[0] for row in relations_after},
+    )
+    if has_managed_uploads_after:
+        verify_managed_uploads_schema(conn, require_empty=True)
     vector = conn.execute(
         """SELECT n.nspname FROM pg_extension e
            JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'vector'"""
@@ -113,6 +123,241 @@ def apply_schema(conn: Connection, schema_sql: str) -> None:
     if (len(security) != len(TARGET_TABLES)
             or any(not row[1] or row[2] or row[3] or not row[4] for row in security)):
         raise RuntimeError("EvidenceAI tables have unexpected RLS or role grants")
+
+
+def validate_approved_public_relations(relation_names: Iterable[str]) -> bool:
+    """Reject every public relation except the core tables and approved add-on."""
+    names = set(relation_names)
+    unexpected = names - APPROVED_PUBLIC_TABLES
+    if unexpected:
+        raise RuntimeError(
+            "public schema contains unexpected tables; refusing database operation: "
+            + ", ".join(sorted(unexpected))
+        )
+    return MANAGED_UPLOADS_TABLE in names
+
+
+def verify_managed_uploads_schema(
+    conn: Connection, *, require_empty: bool,
+) -> bool:
+    """Validate the sole approved add-on table and its exact access contract.
+
+    Legacy corpus ingestion may continue only while this table is empty. The
+    routine is read-only and deliberately rejects similarly named but
+    incompatible or partially installed objects.
+    """
+    relation = conn.execute(
+        """SELECT table_type FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = %s""",
+        (MANAGED_UPLOADS_TABLE,),
+    ).fetchone()
+    if relation is None:
+        return False
+    if relation[0] != "BASE TABLE":
+        raise RuntimeError("public.managed_uploads is not an approved base table")
+
+    table = conn.execute(
+        """SELECT c.oid, c.relkind, c.relrowsecurity,
+                  has_table_privilege('anon', c.oid, 'SELECT'),
+                  has_table_privilege('anon', c.oid, 'INSERT'),
+                  has_table_privilege('anon', c.oid, 'UPDATE'),
+                  has_table_privilege('anon', c.oid, 'DELETE'),
+                  has_table_privilege('authenticated', c.oid, 'SELECT'),
+                  has_table_privilege('authenticated', c.oid, 'INSERT'),
+                  has_table_privilege('authenticated', c.oid, 'UPDATE'),
+                  has_table_privilege('authenticated', c.oid, 'DELETE'),
+                  has_table_privilege('service_role', c.oid, 'SELECT'),
+                  has_table_privilege('service_role', c.oid, 'INSERT'),
+                  has_table_privilege('service_role', c.oid, 'UPDATE'),
+                  has_table_privilege('service_role', c.oid, 'DELETE')
+           FROM pg_catalog.pg_class c
+           JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = 'public' AND c.relname = %s""",
+        (MANAGED_UPLOADS_TABLE,),
+    ).fetchone()
+    if not table or table[1] != "r" or not table[2]:
+        raise RuntimeError("managed_uploads must be a base table with RLS enabled")
+    if any(table[index] for index in range(3, 11)) or not all(table[index] for index in range(11, 15)):
+        raise RuntimeError("managed_uploads grants must be backend-only")
+
+    public_grants = conn.execute(
+        """SELECT 1 FROM pg_catalog.pg_class c
+           CROSS JOIN LATERAL aclexplode(
+               COALESCE(c.relacl, acldefault('r', c.relowner))
+           ) acl
+           WHERE c.oid = %s AND acl.grantee = 0 LIMIT 1""",
+        (table[0],),
+    ).fetchone()
+    policies = conn.execute(
+        "SELECT 1 FROM pg_catalog.pg_policy WHERE polrelid = %s LIMIT 1",
+        (table[0],),
+    ).fetchone()
+    triggers = conn.execute(
+        "SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = %s AND NOT tgisinternal LIMIT 1",
+        (table[0],),
+    ).fetchone()
+    if public_grants or policies or triggers:
+        raise RuntimeError("managed_uploads must have no PUBLIC grants, RLS policies, or triggers")
+
+    expected_columns = {
+        "upload_id": ("uuid", True), "doc_id": ("text", True),
+        "source_id": ("text", True), "original_filename": ("text", True),
+        "file_format": ("text", True), "title": ("text", True),
+        "file_size_bytes": ("integer", True), "chunking_strategy": ("text", True),
+        "parser_metadata": ("jsonb", True),
+        "uploaded_at": ("timestamp with time zone", True),
+        "updated_at": ("timestamp with time zone", True), "row_version": ("bigint", True),
+    }
+    column_rows = conn.execute(
+        """SELECT a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), a.attnotnull
+           FROM pg_catalog.pg_attribute a
+           WHERE a.attrelid = %s AND a.attnum > 0 AND NOT a.attisdropped""",
+        (table[0],),
+    ).fetchall()
+    columns = {row[0]: (row[1], row[2]) for row in column_rows}
+    if columns != expected_columns:
+        raise RuntimeError("managed_uploads columns differ from the approved schema")
+
+    defaults = dict(conn.execute(
+        """SELECT a.attname, pg_catalog.pg_get_expr(d.adbin, d.adrelid)
+           FROM pg_catalog.pg_attribute a
+           JOIN pg_catalog.pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+           WHERE a.attrelid = %s AND a.attname IN (
+               'parser_metadata', 'uploaded_at', 'updated_at', 'row_version'
+           )""",
+        (table[0],),
+    ).fetchall())
+    if defaults != {
+        "parser_metadata": "'{}'::jsonb", "uploaded_at": "now()",
+        "updated_at": "now()", "row_version": "1",
+    }:
+        raise RuntimeError("managed_uploads defaults differ from the approved schema")
+
+    constraints = {
+        row[0]: (row[1], _normalize_catalog_sql(row[2]))
+        for row in conn.execute(
+            """SELECT conname, contype, pg_catalog.pg_get_constraintdef(oid)
+               FROM pg_catalog.pg_constraint WHERE conrelid = %s""",
+            (table[0],),
+        ).fetchall()
+    }
+    expected_constraint_names = {
+        "managed_uploads_pkey", "managed_uploads_doc_id_key",
+        "managed_uploads_source_id_key", "managed_uploads_doc_fk",
+        "managed_uploads_source_doc_fk", "managed_uploads_filename_check",
+        "managed_uploads_format_check", "managed_uploads_title_check",
+        "managed_uploads_file_size_check", "managed_uploads_strategy_check",
+        "managed_uploads_metadata_check", "managed_uploads_row_version_check",
+    }
+    if set(constraints) != expected_constraint_names:
+        raise RuntimeError("managed_uploads constraints differ from the approved schema")
+    expected_definitions = {
+        "managed_uploads_pkey": ("p", "primary key(upload_id)"),
+        "managed_uploads_doc_id_key": ("u", "unique(doc_id)"),
+        "managed_uploads_source_id_key": ("u", "unique(source_id)"),
+        "managed_uploads_doc_fk": (
+            "f", "foreign key(doc_id) references documents(doc_id) on delete restrict",
+        ),
+        "managed_uploads_source_doc_fk": (
+            "f", "foreign key(source_id,doc_id) references document_sources(source_id,doc_id) on delete restrict",
+        ),
+    }
+    for name, (kind, fragment) in expected_definitions.items():
+        actual_kind, definition = constraints[name]
+        if actual_kind != kind or _normalize_catalog_sql(fragment) not in definition:
+            raise RuntimeError(f"managed_uploads constraint {name} is incompatible")
+    check_terms = {
+        "managed_uploads_filename_check": (
+            "c", "char_length(original_filename)>=1", "char_length(original_filename)<=255",
+        ),
+        "managed_uploads_format_check": ("c", "file_format", "'pdf'", "'docx'", "'txt'", "'md'"),
+        "managed_uploads_title_check": (
+            "c", "char_length(title)>=1", "char_length(title)<=300",
+        ),
+        "managed_uploads_file_size_check": (
+            "c", "file_size_bytes>=1", "file_size_bytes<=5242880",
+        ),
+        "managed_uploads_strategy_check": ("c", "chunking_strategy", "'paragraph'", "'fixed_overlap'"),
+        "managed_uploads_metadata_check": ("c", "jsonb_typeof(parser_metadata)", "'object'"),
+        "managed_uploads_row_version_check": ("c", "row_version", "1"),
+    }
+    for name, terms in check_terms.items():
+        kind, definition = constraints[name]
+        if kind != terms[0] or any(
+            _normalize_catalog_sql(term) not in definition for term in terms[1:]
+        ):
+            raise RuntimeError(f"managed_uploads constraint {name} is incompatible")
+    exact_check_literals = {
+        "managed_uploads_format_check": ["pdf", "docx", "txt", "md"],
+        "managed_uploads_strategy_check": ["paragraph", "fixed_overlap"],
+        "managed_uploads_metadata_check": ["object"],
+    }
+    for name, expected_literals in exact_check_literals.items():
+        actual_literals = re.findall(r"'([^']*)'", constraints[name][1])
+        if actual_literals != expected_literals:
+            raise RuntimeError(f"managed_uploads constraint {name} is incompatible")
+
+    indexes = {
+        row[0]: (row[1], row[2], row[3], _normalize_catalog_sql(row[4]))
+        for row in conn.execute(
+            """SELECT idx.relname, am.amname, i.indisunique, i.indisvalid,
+                      pg_catalog.pg_get_indexdef(i.indexrelid)
+               FROM pg_catalog.pg_index i
+               JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
+               JOIN pg_catalog.pg_am am ON am.oid = idx.relam
+               WHERE i.indrelid = %s""",
+            (table[0],),
+        ).fetchall()
+    }
+    if set(indexes) != {
+        "managed_uploads_pkey", "managed_uploads_doc_id_key",
+        "managed_uploads_source_id_key", "managed_uploads_uploaded_at_idx",
+    }:
+        raise RuntimeError("managed_uploads indexes differ from the approved schema")
+    list_index = indexes["managed_uploads_uploaded_at_idx"]
+    if list_index[:3] != ("btree", False, True) or "uploaded_atdesc,upload_id" not in list_index[3]:
+        raise RuntimeError("managed_uploads listing index is missing or incompatible")
+
+    source_indexes = {
+        row[0] for row in conn.execute(
+            """SELECT idx.relname::text
+               FROM pg_catalog.pg_index i
+               JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
+               WHERE i.indrelid = 'public.document_sources'::regclass""",
+        ).fetchall()
+    }
+    if source_indexes != {
+        "document_sources_pkey", "document_sources_doc_id_idx",
+        "document_sources_title_normalized_idx", "document_sources_source_doc_idx",
+    }:
+        raise RuntimeError("document_sources indexes include unexpected schema objects")
+
+    source_pair_index = conn.execute(
+        """SELECT am.amname, i.indisunique, i.indisvalid,
+                  pg_catalog.pg_get_indexdef(i.indexrelid)
+           FROM pg_catalog.pg_index i
+           JOIN pg_catalog.pg_class idx ON idx.oid = i.indexrelid
+           JOIN pg_catalog.pg_am am ON am.oid = idx.relam
+           WHERE idx.oid = to_regclass('public.document_sources_source_doc_idx')
+             AND i.indrelid = 'public.document_sources'::regclass"""
+    ).fetchone()
+    if (not source_pair_index or source_pair_index[:3] != ("btree", True, True)
+            or "source_id,doc_id" not in _normalize_catalog_sql(source_pair_index[3])):
+        raise RuntimeError("the approved source/document pair index is missing or incompatible")
+
+    if require_empty and conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM public.managed_uploads LIMIT 1)"
+    ).fetchone()[0]:
+        raise RuntimeError(
+            "managed_uploads is non-empty; legacy corpus ingestion must not run "
+            "after managed uploads begin"
+        )
+    return True
+
+
+def _normalize_catalog_sql(value: str) -> str:
+    """Normalize catalog SQL for stable, case-insensitive schema checks."""
+    return re.sub(r"\s+", "", value.lower().replace('"', "")).replace("public.", "")
 
 
 def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> None:
@@ -161,14 +406,16 @@ def _check_existing_tables(conn: Connection, *, require_all: bool = False) -> No
 
 
 def read_database_metrics(conn: Connection) -> dict[str, Any]:
-    """Measure database, heap, index, row, and vector-column storage."""
+    """Measure corpus and approved upload-table storage without mixing counts."""
     database_size = conn.execute("SELECT pg_database_size(current_database())").fetchone()[0]
     tables: dict[str, dict[str, int]] = {}
+    additional_tables: dict[str, dict[str, int]] = {}
     indexes: list[dict[str, Any]] = []
-    for table in TARGET_TABLES:
+    for table in (*TARGET_TABLES, MANAGED_UPLOADS_TABLE):
         relation = conn.execute("SELECT to_regclass(%s)", (f"public.{table}",)).fetchone()[0]
+        metric_group = tables if table in TARGET_TABLES else additional_tables
         if relation is None:
-            tables[table] = {
+            metric_group[table] = {
                 "rows": 0, "heap_bytes": 0, "table_storage_bytes": 0,
                 "index_bytes": 0, "total_relation_size_bytes": 0,
             }
@@ -181,7 +428,7 @@ def read_database_metrics(conn: Connection) -> dict[str, Any]:
         count, heap_size, table_size, index_size, total_size = conn.execute(
             query, (f"public.{table}",) * 4,
         ).fetchone()
-        tables[table] = {
+        metric_group[table] = {
             "rows": count,
             "heap_bytes": heap_size,
             "table_storage_bytes": table_size,
@@ -213,6 +460,7 @@ def read_database_metrics(conn: Connection) -> dict[str, Any]:
     return {
         "database_size_bytes": database_size,
         "tables": tables,
+        "additional_tables": additional_tables,
         "indexes": indexes,
         "embedding_storage": {
             "rows": embedding_rows,

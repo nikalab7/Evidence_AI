@@ -45,6 +45,10 @@ temporary-unavailable response if the table is missing.
   upload handler. It embeds before opening the final write transaction, so no
   database transaction stays open during embedding. Embeddings are validated as
   finite 384-dimensional vectors.
+- Write updates are guarded by a monotonic `row_version` read under `FOR UPDATE`;
+  timestamps are no longer used as the concurrency token. The ASGI body limiter
+  permits one upload/update at a time per process and returns 429 for overlapping
+  writes, bounding simultaneous multipart and embedding work within one worker.
 
 ### Identity, deduplication, and ownership
 
@@ -58,9 +62,12 @@ own source and manager row. A document with any other provenance remains
 searchable and is not deleted. Strategy replacement is refused when the
 document has other source aliases because chunks are shared by content ID.
 
-The proposal creates only `public.managed_uploads`, its timestamp index,
-constraints, RLS, and service-role grants. It does not drop, truncate, rewrite,
-or delete existing tables or records. No migration is run during startup.
+The proposal creates `public.managed_uploads`, a timestamp listing index, and a
+unique `(source_id, doc_id)` index on `document_sources`, plus constraints, RLS,
+and service-role grants. The composite foreign key prevents an owner row from
+pointing at a source belonging to a different document. It does not drop,
+truncate, rewrite, or delete existing tables or records. No migration is run
+during startup.
 
 ## Chunking comparison
 
@@ -92,10 +99,14 @@ capacity or latency estimates.
 Both strategies ranked all three synthetic evidence passages first. This tiny,
 constructed candidate set does not establish retrieval quality on the 50K
 corpus. No production database retrieval benchmark or corpus reindex was run.
-The paragraph approach respects source paragraph boundaries and avoids overlap
-duplication, but a single long paragraph can still produce a large chunk. Fixed
-windows bound chunk length and preserve adjacent context, at the cost of overlap
-storage and possible cuts inside sentences/words.
+The original paragraph strategy respects source paragraph boundaries and avoids
+overlap duplication. Managed uploads additionally split paragraphs longer than
+1,000 characters; the Phase 1E corpus chunking defaults are unchanged. The fixed
+strategy uses overlapping 1,000-character windows. A maximum upload of 200,000
+characters produces at most 200 paragraph chunks for one long paragraph or 236
+fixed-overlap chunks. More than 250 chunks (for example, a file made of many
+tiny paragraphs) is rejected before embedding. Fixed windows preserve adjacent
+context at the cost of overlap storage and possible cuts inside sentences/words.
 
 ## Security, resource bounds, and limitations
 
@@ -106,10 +117,12 @@ storage and possible cuts inside sentences/words.
   `authenticated` table access, and grants CRUD only to `service_role`; no
   browser Supabase key is used. Backend DB access still depends on the private
   server-side `DATABASE_URL` and existing project-identity guard.
-- The 5 MiB request cap, 200,000-character extraction cap, 200-page PDF limit,
-  and 20 MiB DOCX expansion cap bound normal parser/embedding inputs. No Render
-  RSS measurement is claimed because this change was not deployed. Verify upload
-  memory under the live 512 MiB plan after schema approval and deployment.
+- The 5 MiB request cap, one concurrent write per process, 200,000-character
+  extraction cap, 250-chunk cap, 200-page PDF limit, and 20 MiB DOCX expansion
+  cap bound parser/embedding work. The middleware still buffers one bounded
+  request body while FastAPI parses it, so peak RAM may exceed the file size.
+  No Render upload RSS measurement is claimed because this change was not
+  deployed. Verify uploads under the live 512 MiB plan after schema approval.
 - A local Windows HTTP smoke check returned 200 for `/`, `/library`, and
   `/health`; the root displayed the 50,000-record count and linked the library.
   Startup RSS was 228,982,784 bytes and peak RSS was 262,832,128 bytes after
@@ -122,9 +135,9 @@ storage and possible cuts inside sentences/words.
   session is implemented. The owner must upload a replacement file again to
   update content; uploaded source sentences are empty because no trusted source
   sentence annotations are supplied, while citations use reconstructed chunks.
-- The new API has no production database integration result: mocked transaction
-  tests check application write ordering/rollback/ownership rules, not the
-  PostgreSQL parser, grants, or live trigger execution.
+- The new API has no PostgreSQL integration result: mocked transaction tests
+  check application write ordering/rollback/ownership rules, not the PostgreSQL
+  parser, grants, or live trigger execution.
 
 ## Tests and reproduction
 
@@ -135,7 +148,8 @@ Run the complete suite and the strategy comparison from the repository root:
 .\.venv\Scripts\python -m scripts.compare_chunking
 ```
 
-The complete local test suite passed: **181 tests**. It covers UTF-8 parsing,
+The Phase 6B baseline passed **181 tests**. Phase 6B.1 results are recorded in
+[`phase6b_1_safety_review.md`](phase6b_1_safety_review.md). Existing tests cover UTF-8 parsing,
 text PDF/DOCX extraction, scanned-PDF rejection, malformed/empty/oversized
 files, chunk offsets, both chunkers,
 authentication, safe API errors, content deduplication, rollback, replacement,

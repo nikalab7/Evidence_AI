@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+from threading import Lock
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -34,6 +36,7 @@ class RequestBodyLimitMiddleware:
     def __init__(self, app: ASGIApp, *, max_bytes: int = 16_384) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self._upload_write_gate = Lock()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path, method = scope.get("path", ""), scope.get("method", "")
@@ -41,11 +44,14 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        is_upload_write = (
+            (path == "/api/documents" and method == "POST")
+            or (path.startswith("/api/documents/") and method == "PUT")
+        )
         if path == "/api/investigate" and method == "POST":
             body_limit = self.max_bytes
             error_detail = "Investigation request body is too large."
-        elif (path == "/api/documents" and method == "POST"
-              or path.startswith("/api/documents/") and method == "PUT"):
+        elif is_upload_write:
             # A single file is capped at 5 MiB; this allowance covers multipart
             # boundaries and the short title/strategy fields.
             body_limit = 5 * 1024 * 1024 + 64 * 1024
@@ -65,32 +71,56 @@ class RequestBodyLimitMiddleware:
             )(scope, receive, send)
             return
 
-        messages = []
-        body_bytes = 0
-        while True:
-            asgi_message = await receive()
-            if asgi_message["type"] == "http.request":
-                body_bytes += len(asgi_message.get("body", b""))
-                if body_bytes > body_limit:
-                    await JSONResponse(
-                        status_code=413,
-                        content={"detail": error_detail},
-                    )(scope, receive, send)
-                    return
-            messages.append(asgi_message)
-            if (asgi_message["type"] == "http.disconnect"
-                    or not asgi_message.get("more_body", False)):
-                break
+        if is_upload_write and not self._upload_write_gate.acquire(blocking=False):
+            await JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "Another document upload or update is in progress. Please retry shortly."
+                },
+                headers={"Retry-After": "1"},
+            )(scope, receive, send)
+            return
 
-        buffered = iter(messages)
+        try:
+            body = bytearray()
+            disconnected = False
+            body_bytes = 0
+            while True:
+                asgi_message = await receive()
+                if asgi_message["type"] == "http.disconnect":
+                    disconnected = True
+                    break
+                if asgi_message["type"] == "http.request":
+                    chunk = asgi_message.get("body", b"")
+                    body_bytes += len(chunk)
+                    if body_bytes > body_limit:
+                        await JSONResponse(
+                            status_code=413,
+                            content={"detail": error_detail},
+                        )(scope, receive, send)
+                        return
+                    body.extend(chunk)
+                    if not asgi_message.get("more_body", False):
+                        break
 
-        async def replay_receive():
-            try:
-                return next(buffered)
-            except StopIteration:
-                return await receive()
+            body_content = bytes(body)
+            replayed = False
 
-        await self.app(scope, replay_receive, send)
+            async def replay_receive():
+                nonlocal replayed
+                if replayed:
+                    return await receive()
+                replayed = True
+                if disconnected:
+                    return {"type": "http.disconnect"}
+                return {
+                    "type": "http.request", "body": body_content, "more_body": False,
+                }
+
+            await self.app(scope, replay_receive, send)
+        finally:
+            if is_upload_write:
+                self._upload_write_gate.release()
 
 
 app.add_middleware(RequestBodyLimitMiddleware)

@@ -36,6 +36,8 @@ from app.ingestion.parsers import (
 SUPPORTED_CHUNKING_STRATEGIES = frozenset({PARAGRAPH_STRATEGY, "fixed_overlap"})
 UPLOAD_SOURCE_REVISION = "managed-upload-v1"
 UPLOAD_SOURCE_SPLIT = "managed_upload"
+MAX_MANAGED_UPLOAD_CHUNKS = 250
+MAX_PARAGRAPH_CHUNK_CHARS = 1_000
 
 
 class UploadInputError(ValueError):
@@ -156,7 +158,7 @@ def replace_upload(
             upload_id=upload_id,
             expected_doc_id=current["doc_id"],
             expected_source_id=current["source_id"],
-            expected_updated_at=current["updated_at"],
+            expected_row_version=current["row_version"],
             document=document,
             upload=upload,
         )
@@ -233,7 +235,13 @@ def _prepare_upload_metadata_only(
         record,
         chunking_strategy=chunking_strategy,
         allow_empty_source_sentences=True,
+        max_paragraph_chars=MAX_PARAGRAPH_CHUNK_CHARS,
     )
+    if len(document["chunks"]) > MAX_MANAGED_UPLOAD_CHUNKS:
+        raise UploadInputError(
+            f"The document needs more than {MAX_MANAGED_UPLOAD_CHUNKS} chunks; "
+            "shorten it or choose a different file."
+        )
     document["sources"][0]["source_url"] = source["_source"]
     return document
 

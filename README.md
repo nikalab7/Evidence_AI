@@ -4,7 +4,7 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. Phase 6B document upload and management code is prepared locally. Its additive ownership-table migration is proposal-only; it has not been applied, and no live database write or production deployment was performed. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
+Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. Phase 6B document management and the Phase 6B.1 compatibility review are implemented locally. The additive migration is still proposal-only; it has not been applied, and no production database write or deployment was performed. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
 
 The single-service FastAPI application serves the investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
 
@@ -139,9 +139,14 @@ Keep real credentials in `.env`, which Git ignores. `.env.example` contains name
 The Document Library supports text-based PDF, DOCX, UTF-8 TXT, and Markdown
 uploads. Scanned/image-only PDFs are rejected with an OCR-required message.
 Uploads are limited to 5 MiB, extracted text to 200,000 characters, PDFs to 200
-pages, and DOCX packages to 20 MiB expanded size. Paragraph chunks and 1,000-
-character chunks with 150-character overlap both preserve offsets into the
-canonical text.
+pages, and DOCX packages to 20 MiB expanded size. Upload paragraph chunks keep
+paragraph boundaries and split any paragraph longer than 1,000 characters;
+fixed chunks are 1,000 characters with 150-character overlap. Both preserve
+Unicode character offsets into canonical text. Each upload is capped at 250
+chunks; an input needing more chunks is rejected before embedding. The request
+middleware permits one upload/update at a time per process while it buffers and
+indexes the bounded body. This is a process-local memory guard, not a global
+limit across multiple service instances.
 
 All `/api/documents` routes, including list and inspect, require
 `Authorization: Bearer <ADMIN_TOKEN>`. The token stays only in the open page's
@@ -154,17 +159,32 @@ Content IDs are normalized text hashes. Identical content already in the index
 is rejected without adding upload ownership; replacement creates a new ID for
 changed content rather than editing text under the old ID. Upload provenance is
 recorded separately, and delete removes only that upload's provenance. A
-document still referenced by another source is retained. New chunks use the
-existing embeddings, FTS trigger, and semantic/keyword/hybrid queries, so the
-50,000-document corpus is not reindexed.
+document still referenced by another source is retained. The ownership row uses
+a composite foreign key so its source must belong to the same document. New
+chunks use the existing embeddings, FTS trigger, and semantic/keyword/hybrid
+queries, so the 50,000-document corpus is not reindexed.
 
 Before the library can use Supabase, review and explicitly approve
 [`migrations/proposals/phase6b_managed_uploads.sql`](migrations/proposals/phase6b_managed_uploads.sql)
 and apply it manually to the Frankfurt Evidence_AI project. The application
-never runs this migration at startup. Do not deploy or write to production
-until the owner has approved and applied that additive migration and configured
-`ADMIN_TOKEN`. The local tests use fixtures and fakes; they do not verify live
-schema, database CRUD, or Render behavior.
+never runs this migration at startup. The proposal creates only
+`public.managed_uploads`, its listing index, and the source/document unique
+index needed by the composite foreign key. It is repeatable and fails closed if
+same-named objects have a different shape. Do not deploy or write to production
+until the owner has approved and applied it and configured `ADMIN_TOKEN`.
+
+Once the first managed upload is created, do not run either legacy corpus
+writer: `scripts/ingest_hotpotqa.py` or `scripts/ingest_phase5.py`. Both now
+reject a non-empty `managed_uploads` table before writing; their preflight does
+not replace this operational rule. The read-only `scripts/measure_db_size.py`
+remains available and reports the managed table separately. PostgreSQL-backed
+migration/CRUD verification is still pending because no explicitly disposable
+local PostgreSQL instance is configured. The local tests use isolated fixtures
+and fakes; they do not verify live schema, grants, triggers, or Render behavior.
+
+See [`reports/phase6b_1_safety_review.md`](reports/phase6b_1_safety_review.md)
+for the review findings, remaining production risks, and operator activation
+checklist.
 
 Run the local strategy comparison with:
 

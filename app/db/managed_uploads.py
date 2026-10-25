@@ -24,6 +24,7 @@ class ManagedUpload(TypedDict, total=False):
     parser_metadata: dict[str, Any]
     uploaded_at: Any
     updated_at: Any
+    row_version: int
     source_url: str
     source_revision: str
     source_split: str
@@ -68,7 +69,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 UPLOAD_SELECT_COLUMNS = """
 m.upload_id::text, m.doc_id, m.source_id, m.original_filename, m.file_format,
 m.title, m.file_size_bytes, m.chunking_strategy, m.parser_metadata,
-m.uploaded_at, m.updated_at
+m.uploaded_at, m.updated_at, m.row_version
 """
 
 
@@ -99,6 +100,7 @@ def list_managed_uploads(
               FROM public.managed_uploads m
               JOIN public.documents d ON d.doc_id = m.doc_id
                JOIN public.document_sources s ON s.source_id = m.source_id
+                                               AND s.doc_id = m.doc_id
               LEFT JOIN public.chunks c ON c.doc_id = m.doc_id
               GROUP BY m.upload_id, d.doc_id, s.source_id
               ORDER BY m.uploaded_at DESC, m.upload_id
@@ -117,6 +119,7 @@ def get_managed_upload(conn: Connection, upload_id: UUID) -> ManagedUpload | Non
               FROM public.managed_uploads m
               JOIN public.documents d ON d.doc_id = m.doc_id
                JOIN public.document_sources s ON s.source_id = m.source_id
+                                               AND s.doc_id = m.doc_id
               WHERE m.upload_id = %s""",
         (upload_id,),
     ).fetchone()
@@ -146,7 +149,7 @@ def replace_managed_upload(
     upload_id: UUID,
     expected_doc_id: str,
     expected_source_id: str,
-    expected_updated_at: Any,
+    expected_row_version: int,
     document: Mapping[str, Any],
     upload: Mapping[str, Any],
 ) -> ManagedUpload:
@@ -156,7 +159,7 @@ def replace_managed_upload(
         if current is None:
             raise UploadNotFoundError("managed upload does not exist")
         if (current[1] != expected_doc_id or current[2] != expected_source_id
-                or current[10] != expected_updated_at):
+                or current[11] != expected_row_version):
             raise ConcurrentUploadUpdateError("the managed upload changed; reload and retry")
 
         old_doc_id, old_source_id = current[1], current[2]
@@ -192,7 +195,8 @@ def replace_managed_upload(
             """UPDATE public.managed_uploads
                SET doc_id = %s, source_id = %s, original_filename = %s,
                    file_format = %s, title = %s, file_size_bytes = %s,
-                   chunking_strategy = %s, parser_metadata = %s, updated_at = now()
+                   chunking_strategy = %s, parser_metadata = %s,
+                   updated_at = clock_timestamp(), row_version = row_version + 1
                WHERE upload_id = %s""",
             (
                 new_doc_id, new_source_id, upload["original_filename"],
@@ -308,20 +312,21 @@ def _map_upload(row: tuple[Any, ...], *, include_text: bool, list_row: bool) -> 
         "original_filename": row[3], "file_format": row[4], "title": row[5],
         "file_size_bytes": row[6], "chunking_strategy": row[7],
         "parser_metadata": row[8] or {}, "uploaded_at": row[9], "updated_at": row[10],
+        "row_version": row[11],
     }
     if list_row:
-        result["text_chars"] = row[11]
-        result["chunk_count"] = row[12]
-        result["source_url"] = row[13]
-        result["source_revision"] = row[14]
-        result["source_split"] = row[15]
-        result["source_sentences"] = row[16] or []
-    elif include_text:
-        result["text"] = row[11]
-        result["document_metadata"] = row[12] or {}
+        result["text_chars"] = row[12]
         result["chunk_count"] = row[13]
         result["source_url"] = row[14]
         result["source_revision"] = row[15]
         result["source_split"] = row[16]
         result["source_sentences"] = row[17] or []
+    elif include_text:
+        result["text"] = row[12]
+        result["document_metadata"] = row[13] or {}
+        result["chunk_count"] = row[14]
+        result["source_url"] = row[15]
+        result["source_revision"] = row[16]
+        result["source_split"] = row[17]
+        result["source_sentences"] = row[18] or []
     return result

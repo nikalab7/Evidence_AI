@@ -85,6 +85,25 @@ def test_capacity_projection_refuses_invalid_counts_and_oversized_relations():
         estimate_final_database_size(metrics, 1)
 
 
+def test_capacity_projection_counts_empty_managed_table_as_fixed_storage():
+    metrics = {
+        "database_size_bytes": 1_000_000,
+        "tables": {
+            "documents": {"total_relation_size_bytes": 40_000},
+            "document_sources": {"total_relation_size_bytes": 20_000},
+            "chunks": {"total_relation_size_bytes": 40_000},
+        },
+        "additional_tables": {
+            "managed_uploads": {"rows": 0, "total_relation_size_bytes": 10_000},
+        },
+    }
+    projection = estimate_final_database_size(metrics, 1_000)
+    assert projection["current_target_relation_bytes"] == 110_000
+    assert projection["non_target_database_bytes"] == 890_000
+    assert projection["linear_50k_database_bytes"] == 5_900_000
+    assert projection["projected_50k_database_bytes_with_margin"] == 7_375_000
+
+
 def test_capacity_gate_error_retains_verified_current_count():
     error = CapacityGateError("stop", current_documents=12_345)
     assert str(error) == "stop"

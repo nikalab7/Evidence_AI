@@ -6,7 +6,9 @@ from uuid import UUID
 import pytest
 
 from app.db.managed_uploads import (
+    ConcurrentUploadUpdateError,
     UploadConflictError,
+    UploadNotFoundError,
     delete_managed_upload,
     insert_managed_upload,
     replace_managed_upload,
@@ -95,6 +97,7 @@ class MemoryDatabase:
                 "chunking_strategy": strategy,
                 "parser_metadata": self._payload(parser_metadata),
                 "uploaded_at": self.updated_at, "updated_at": self.updated_at,
+                "row_version": 1,
             }
             return Result()
         if "SELECT EXISTS (SELECT 1 FROM PUBLIC.DOCUMENTS" in upper:
@@ -129,7 +132,8 @@ class MemoryDatabase:
             row = self.uploads[upload_id]
             row.update(doc_id=doc_id, source_id=source_id, original_filename=filename,
                        file_format=file_format, title=title, file_size_bytes=size,
-                       chunking_strategy=strategy, parser_metadata=self._payload(parser_metadata))
+                       chunking_strategy=strategy, parser_metadata=self._payload(parser_metadata),
+                       row_version=row["row_version"] + 1)
             self.updated_at = self.updated_at.replace(second=self.updated_at.second + 1)
             row["updated_at"] = self.updated_at
             return Result()
@@ -162,6 +166,7 @@ class MemoryDatabase:
             str(row["upload_id"]), row["doc_id"], row["source_id"], row["original_filename"],
             row["file_format"], row["title"], row["file_size_bytes"],
             row["chunking_strategy"], row["parser_metadata"], row["uploaded_at"], row["updated_at"],
+            row["row_version"],
         )
 
 
@@ -229,6 +234,92 @@ def test_replacement_uses_new_content_id_and_removes_unreferenced_old_content(mo
     assert replaced["source_sentences"] == []
 
 
+def test_stale_same_content_replacement_is_rejected_by_monotonic_version(monkeypatch):
+    import app.ingestion.managed_documents as service
+
+    db = MemoryDatabase()
+    _save_service_db(monkeypatch, db)
+    created = create_upload(
+        filename="one.txt", content=b"Stable content for a stale update.", title="Original",
+        chunking_strategy="paragraph", model=FakeEmbeddingModel(),
+    )
+    upload_id = UUID(created["upload_id"])
+    stale_version = created["row_version"]
+    current_text = created["text"]
+    parsed = service.parse_upload("renamed.txt", current_text.encode())
+    replacement = service._prepare_upload_metadata_only(
+        upload_id=upload_id, title="Renamed", text=current_text,
+        chunking_strategy="paragraph",
+    )
+    upload_row = service._upload_row(
+        upload_id=upload_id, document=replacement, parsed=parsed,
+        original_filename="renamed.txt", title="Renamed", strategy="paragraph",
+    )
+    first = replace_managed_upload(
+        db, upload_id=upload_id,
+        expected_doc_id=created["doc_id"], expected_source_id=created["source_id"],
+        expected_row_version=stale_version, document=replacement, upload=upload_row,
+    )
+    assert first["row_version"] == stale_version + 1
+
+    with pytest.raises(ConcurrentUploadUpdateError, match="changed"):
+        replace_managed_upload(
+            db, upload_id=upload_id,
+            expected_doc_id=created["doc_id"], expected_source_id=created["source_id"],
+            expected_row_version=stale_version, document=replacement, upload=upload_row,
+        )
+    assert db.uploads[upload_id]["row_version"] == stale_version + 1
+
+
+def test_stale_replacement_after_delete_cannot_recreate_upload(monkeypatch):
+    db = MemoryDatabase()
+    _save_service_db(monkeypatch, db)
+    created = create_upload(
+        filename="one.txt", content=b"Delete wins over stale replacement.", title=None,
+        chunking_strategy="paragraph", model=FakeEmbeddingModel(),
+    )
+    assert remove_upload(UUID(created["upload_id"])) is True
+    with pytest.raises(UploadNotFoundError, match="does not exist"):
+        replace_managed_upload(
+            db, upload_id=UUID(created["upload_id"]),
+            expected_doc_id=created["doc_id"], expected_source_id=created["source_id"],
+            expected_row_version=created["row_version"],
+            document={}, upload={},
+        )
+
+
+def test_upload_chunk_limits_bound_long_paragraphs_and_total_chunks():
+    import app.ingestion.managed_documents as service
+    from app.ingestion.managed_documents import UploadInputError
+
+    upload_id = UUID("3c949bb7-6b0b-480f-a403-9ef5f5ae16cc")
+    long_text = "a" * 200_000
+    paragraph_doc = service._prepare_upload_metadata_only(
+        upload_id=upload_id, title="Long paragraph", text=long_text,
+        chunking_strategy="paragraph",
+    )
+    assert len(paragraph_doc["chunks"]) == 200
+    assert max(len(chunk["chunk_text"]) for chunk in paragraph_doc["chunks"]) <= 1_000
+    assert all(
+        paragraph_doc["full_text"][chunk["start_char"]:chunk["end_char"]] == chunk["chunk_text"]
+        for chunk in paragraph_doc["chunks"]
+    )
+
+    fixed_doc = service._prepare_upload_metadata_only(
+        upload_id=upload_id, title="Long fixed text", text=long_text,
+        chunking_strategy="fixed_overlap",
+    )
+    assert len(fixed_doc["chunks"]) == 236
+    assert len(fixed_doc["chunks"]) <= service.MAX_MANAGED_UPLOAD_CHUNKS
+
+    too_many_paragraphs = "\n\n".join("x" for _ in range(service.MAX_MANAGED_UPLOAD_CHUNKS + 1))
+    with pytest.raises(UploadInputError, match="more than 250 chunks"):
+        service._prepare_upload_metadata_only(
+            upload_id=upload_id, title="Many paragraphs", text=too_many_paragraphs,
+            chunking_strategy="paragraph",
+        )
+
+
 def test_transaction_rolls_back_document_and_provenance_if_chunk_insert_fails(monkeypatch):
     db = MemoryDatabase()
     db.fail_chunk_insert = True
@@ -250,9 +341,13 @@ def test_schema_proposal_is_additive_and_limits_owned_uploads():
     proposal = (Path(__file__).resolve().parents[1]
                 / "migrations" / "proposals" / "phase6b_managed_uploads.sql")
     sql = proposal.read_text(encoding="utf-8").lower()
-    assert "create table public.managed_uploads" in sql
+    assert "create table if not exists public.managed_uploads" in sql
     assert "references public.documents(doc_id) on delete restrict" in sql
-    assert "references public.document_sources(source_id) on delete restrict" in sql
+    assert "foreign key (source_id, doc_id)" in sql
+    assert "references public.document_sources(source_id, doc_id) on delete restrict" in sql
+    assert "managed_uploads_source_doc_fk" in sql
+    assert "row_version bigint not null default 1" in sql
+    assert "create unique index if not exists document_sources_source_doc_idx" in sql
     assert "enable row level security" in sql
     assert "from public, anon, authenticated" in sql
     assert "drop table" not in sql and "delete from" not in sql and "truncate" not in sql

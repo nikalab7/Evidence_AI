@@ -20,10 +20,13 @@ from app.db.connection import EXPECTED_SUPABASE_PROJECT_REF, connect_database
 from app.db.queries import (
     CHUNKS_SELECT_SQL,
     DOCUMENTS_SELECT_SQL,
+    MANAGED_UPLOADS_TABLE,
     SOURCES_SELECT_SQL,
     insert_batch,
     read_database_document_ids,
     read_database_metrics,
+    validate_approved_public_relations,
+    verify_managed_uploads_schema,
     verify_target_documents,
 )
 from app.embedding_smoke import MODEL_NAME
@@ -123,14 +126,22 @@ def estimate_final_database_size(
     if not 0 <= safety_margin <= 1:
         raise ValueError("safety margin must be between 0 and 1")
     database_bytes = int(metrics["database_size_bytes"])
-    relation_bytes = sum(
+    core_relation_bytes = sum(
         int(table["total_relation_size_bytes"])
         for table in metrics["tables"].values()
     )
+    additive_relation_bytes = sum(
+        int(table["total_relation_size_bytes"])
+        for table in metrics.get("additional_tables", {}).values()
+    )
+    relation_bytes = core_relation_bytes + additive_relation_bytes
     if relation_bytes > database_bytes:
         raise ValueError("target table relation sizes exceed total database size")
     non_target_bytes = database_bytes - relation_bytes
-    scaled_relations = math.ceil(relation_bytes * target_documents / current_documents)
+    scaled_relations = (
+        math.ceil(core_relation_bytes * target_documents / current_documents)
+        + additive_relation_bytes
+    )
     linear_total = non_target_bytes + scaled_relations
     with_margin = math.ceil(linear_total * (1 + safety_margin))
     return {
@@ -153,8 +164,14 @@ def _verify_existing_schema(conn: Any) -> dict[str, Any]:
            ORDER BY c.relname"""
     ).fetchall()
     names = {row[0] for row in relations}
-    if names != TARGET_TABLES or any(row[1] != "r" or not row[2] for row in relations):
+    has_managed_uploads = validate_approved_public_relations(names)
+    expected_relations = set(TARGET_TABLES)
+    if has_managed_uploads:
+        expected_relations.add(MANAGED_UPLOADS_TABLE)
+    if names != expected_relations or any(row[1] != "r" or not row[2] for row in relations):
         raise RuntimeError("public relations or RLS state differ from the approved Phase 1E schema")
+    if has_managed_uploads:
+        verify_managed_uploads_schema(conn, require_empty=True)
 
     columns: dict[str, dict[str, str]] = {}
     for table, column, formatted_type in conn.execute(
@@ -254,6 +271,8 @@ def _verify_existing_schema(conn: Any) -> dict[str, Any]:
         raise RuntimeError("EvidenceAI table privileges differ from the approved backend-only grants")
     return {
         "public_relations": sorted(names),
+        "managed_uploads_schema_verified": has_managed_uploads,
+        "managed_uploads_empty": True,
         "rls_enabled": True,
         "vector_extension_version": vector[1],
         "hnsw_index_valid": True,

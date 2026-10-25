@@ -209,3 +209,25 @@ Local planning and personal preparation notes are excluded from the repository.
 - The complete test result and any remaining operational limitations are in
   `reports/document_ingestion.md`; database grants/trigger behavior and Render
   memory remain unverified pending explicit migration and deployment approval.
+
+## Phase 6B.1 pre-deployment safety review — 2026-10-25
+
+- Codex assistance was used to review Phase 5 schema guards and the proposed
+  managed-upload migration, add a strict allowlist for the approved additional
+  table, and include the empty managed table in capacity measurements. The
+  Frankfurt project identity guard and corpus integrity checks were preserved.
+- The proposal now pairs `source_id` and `doc_id` with a composite foreign key,
+  checks migration reapplication against the expected schema/security contract,
+  and uses a monotonic row version for stale replacement detection. Uploads
+  split oversized paragraphs, cap chunk count, coalesce bounded ASGI body
+  fragments, and serialize write requests per process to bound
+  multipart/embedding concurrency.
+- Added regression tests for schema allowlisting, manager-table constraints,
+  stale replacements after a version change or delete, long Unicode paragraphs,
+  upload concurrency, fragmented bodies, and capacity projections. The full
+  local suite passed 192 tests.
+- No Supabase connection, SQL migration, Render setting, or deployment action
+  was performed. No PostgreSQL server was available for integration testing;
+  the migration, database transaction behavior, grants, and live upload memory
+  remain unverified. See `reports/phase6b_1_safety_review.md` for the operator
+  checklist and pending gates.

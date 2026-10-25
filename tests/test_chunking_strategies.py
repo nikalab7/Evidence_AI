@@ -19,6 +19,15 @@ def test_paragraph_spans_reconstruct_exact_unicode_text_without_mutation():
     assert all(text[start:end] == chunk for (start, end), chunk in zip(spans, chunks))
 
 
+def test_bounded_paragraph_offsets_split_only_oversized_paragraphs():
+    text = "\U0001f9ed" * 2_001 + "\n\nShort paragraph."
+    spans = paragraph_chunk_spans(text, max_chunk_chars=1_000)
+    pieces = [text[start:end] for start, end in spans]
+    assert [len(piece) for piece in pieces] == [1_000, 1_000, 1, len("Short paragraph.")]
+    assert "".join(pieces) == text.replace("\n\n", "")
+    assert paragraph_chunk_spans("\U0001f9ed" * 2_001) == [(0, 2_001)]
+
+
 def test_fixed_overlap_offsets_cover_exact_unicode_substrings():
     text = "αβγ🙂" * 20
     spans = fixed_overlap_chunk_spans(text, chunk_size=17, overlap=5)

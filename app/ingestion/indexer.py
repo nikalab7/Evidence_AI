@@ -19,6 +19,7 @@ def prepare_document(
     *,
     chunking_strategy: str = PARAGRAPH_STRATEGY,
     allow_empty_source_sentences: bool = False,
+    max_paragraph_chars: int | None = None,
 ) -> dict[str, Any]:
     """Validate a source row and retain metadata plus canonical character offsets."""
     if not isinstance(record, Mapping):
@@ -70,7 +71,9 @@ def prepare_document(
     }
     chunks = []
     search_from = 0
-    for position, (start_char, end_char) in enumerate(chunk_spans(text, chunking_strategy)):
+    for position, (start_char, end_char) in enumerate(chunk_spans(
+        text, chunking_strategy, max_paragraph_chars=max_paragraph_chars,
+    )):
         if start_char < search_from or end_char > len(text):
             raise ValueError("chunk offsets are not ordered within canonical document text")
         chunk_text = text[start_char:end_char]
