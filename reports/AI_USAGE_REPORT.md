@@ -184,3 +184,8 @@ Local planning and personal preparation notes are excluded from the repository.
   reported one-request production baseline and configured budget are owner-
   supplied, not independently verified. Three sequential and two concurrent
   request memory measurements remain pending.
+- After the owner supplied a successful two-source Cyma Watches / Universal
+  Genève investigation response, Codex assistance was used to add the exact
+  evidence chain to the README and an interview walk-through. No Render log
+  access was available; the matching `investigation_memory` event remains
+  pending and no timing or memory values were inferred for that request.

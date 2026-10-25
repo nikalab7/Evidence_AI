@@ -1,9 +1,10 @@
 # Phase 4A.1 — Production validation and hardening
 
-**Status: local fixes and automated tests are verified; production validation is
-pending an authorized Frankfurt Render deploy and owner-run live checks.** No
-live investigation was sent during this work. No Gemini budget was consumed,
-and no database was queried or changed.
+**Status: local fixes and automated tests are verified. The owner has since
+shared a successful live multi-hop response; its Render memory log and broader
+production gates remain pending.** No live investigation was sent by the agent
+during this work. No Gemini budget was consumed by the agent, and no database
+was queried or changed.
 
 ## Production evidence supplied by the owner
 
@@ -19,6 +20,13 @@ against authenticated Render logs in this work session:
 | Sampled peak RSS | 309,981,184 bytes (295.6 MiB) |
 | Reported RSS growth | 5,660,672 bytes (5.4 MiB) |
 | Configured process-local investigation budget | 10 per rolling 24 hours |
+
+The owner later shared a successful answer to “The company that oversees Cyma
+Watches was founded when?” It combines the Cyma Watches and Universal Genève
+source passages and returns two distinct chunk IDs. See
+[`docs/INTERVIEW_DEMO.md`](../docs/INTERVIEW_DEMO.md) for the exact answer and
+quotes. This is owner-provided live output, not an independently repeated
+request or verified Render log.
 
 The memory sample is below Render Free's 536,870,912-byte limit, but one
 owner-reported request does not establish memory behavior across three
@@ -75,13 +83,13 @@ access, cold start, or production RSS.
 
 ## Live checks still pending
 
-This workspace has no authenticated Render deployment/log access. The new
-configuration has not been deployed, and no public API request was sent. Before
-live checks, the owner must deploy the committed code to the existing Frankfurt
-service and confirm the app-level budget remains positive. Avoid a Blueprint
-environment sync that would replace the dashboard's current budget with the
-repository's fail-closed value. Preserve the Sydney fallback and do not touch
-Mindo.
+This workspace has no authenticated Render deployment/log access. No deploy
+was triggered here and the owner-shared response does not identify the exact
+deployed commit or verify the current start command. Before further live
+checks, confirm that the existing Frankfurt service runs the intended commit
+and that the app-level budget remains positive. Avoid a Blueprint environment
+sync that would replace the dashboard's current budget with the repository's
+fail-closed value. Preserve the Sydney fallback and do not touch Mindo.
 
 After deployment, use the dashboard to confirm the actual service region,
 `DATABASE_URL` project reference, model-cache build command, start command, and

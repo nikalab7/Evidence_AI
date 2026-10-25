@@ -6,9 +6,15 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
 
-This Phase 4A change adds a single-service FastAPI investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. `INVESTIGATION_DAILY_BUDGET=0` is the fail-closed default until an operator checks Gemini project quota and selects a limit. These in-memory limits reset on process restart and are not a durable global quota.
+This Phase 4A change adds a single-service FastAPI investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
 
-The Frankfurt Render Blueprint remains a separate service configuration. Public deployment, live Gemini quota inspection, and post-deploy RSS checks are pending because this workspace has no Render service access or Google quota-dashboard access. Do not describe the demo as publicly deployed until those checks are recorded in [`reports/phase4a_web_app.md`](reports/phase4a_web_app.md).
+The owner has shared a successful live multi-hop answer for a question connecting Cyma Watches with Universal Genève. This demonstrates one reported public investigation, but Render deployment details, the corresponding memory log, quota availability, and repeated-request RSS behavior have not been independently verified in this workspace. See the [interview demo](docs/INTERVIEW_DEMO.md) and [Phase 4A.1 report](reports/phase4a_1_production_validation.md).
+
+## Interview demo: two-source investigation
+
+**Question:** “The company that oversees Cyma Watches was founded when?”
+
+The owner-shared live response answers **1894** and cites two retrieved chunks: one connects Cyma Watches to Universal Genève; the other says Universal Genève was founded in 1894. The exact quotations and chunk IDs are in [`docs/INTERVIEW_DEMO.md`](docs/INTERVIEW_DEMO.md). The request's Render `investigation_memory` event is still needed to compare its latency and memory with the earlier simple question.
 
 ## Project structure
 
@@ -155,12 +161,16 @@ verifies offline loading. Runtime uses that same cache with
 The public page includes the free-hosting cold-start notice; it cannot appear
 until the server has responded with the initial HTML.
 
-The Frankfurt Blueprint has automatic deploys disabled and requires the owner to
-set `DATABASE_URL`, `GEMINI_API_KEY`, and a quota-checked positive daily budget.
-Its current budget is `0`, which disables investigation requests. After deploy,
-record actual region, cold-start behavior, health response, RSS, and three
-consecutive plus two concurrent real investigations. The previous embedding
-preflight is documented in [reports/render_preflight.md](reports/render_preflight.md);
-Phase 4A gates are tracked in [reports/phase4a_web_app.md](reports/phase4a_web_app.md).
+The Frankfurt Blueprint has automatic deploys disabled. Its checked-in daily
+budget default is `0`, which disables investigation requests; the owner reports
+that the deployed service has a positive 10/day setting. Verify the live
+settings before syncing the Blueprint, since syncing may replace the live
+value. The owner-shared answer demonstrates one successful public request, but
+startup/request RSS, the actual deployed commit and service configuration, and
+repeated/concurrent request measurements remain pending Render log review. The
+previous embedding preflight is documented in
+[reports/render_preflight.md](reports/render_preflight.md); earlier gates are
+in [reports/phase4a_web_app.md](reports/phase4a_web_app.md) and the latest
+evidence is in [reports/phase4a_1_production_validation.md](reports/phase4a_1_production_validation.md).
 
 An exact quote match shows that text occurs in a source; factual entailment requires a separate check.
