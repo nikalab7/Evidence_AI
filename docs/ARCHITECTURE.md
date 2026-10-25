@@ -1,52 +1,121 @@
-﻿# EvidenceAI structure and Phase 1E data path
+# EvidenceAI architecture and investigation flow
 
-The project uses a small FastAPI application and local CLI paths for the
-verified 1,000-document ingestion and Phase 2 retrieval milestones. A folder existing in the tree does
-not mean its feature is complete.
+EvidenceAI is a Python FastAPI application backed by Frankfurt Supabase
+PostgreSQL/pgvector, local FastEmbed query embeddings, and Gemini. The app and
+interface are served by the same process. The live 50,000-document corpus is
+read-only during investigation; this application path does not ingest or alter
+records.
+
+## HTTP surface
+
+- `GET /` serves the responsive investigation page from
+  `app/templates/investigate.html`.
+- `POST /api/investigate` accepts a 3–1,000 character question and one of
+  `semantic`, `keyword`, or `hybrid`. Semantic mode is the default based on the
+  Phase 6A development-set comparison. Keyword and hybrid remain available for
+  comparison and demonstration.
+- `GET /health` returns process liveness only. It does not test Supabase or
+  Gemini.
+- OpenAPI, Swagger, and ReDoc routes are disabled. No admin or document CRUD
+  operation is exposed by this milestone.
+
+The page presents the 50,000-record corpus size, the free-hosting cold-start
+notice, request progress, sanitized errors, citations, exact quotes, and clear
+insufficient/conflicting states. User-controlled and model-produced strings
+are inserted with DOM `textContent`; source links are restricted to HTTP(S).
+The cold-start note is part of the HTML and cannot be seen until the server
+responds with that initial page.
+
+## Request lifecycle
 
 ```text
-app/
-  main.py, config.py, lifespan.py, embedding_smoke.py
-  api/          health.py (working); documents.py, investigations.py (placeholders)
-  db/           connection.py (psycopg); queries.py (parameterized ingestion, retrieval, and metrics)
-  ingestion/    chunkers.py, deduplication.py, indexer.py (1,000-document path); parsers.py (placeholder)
-  retrieval/    engine.py, semantic.py, keyword.py, ranker.py (working CLI retrieval path)
-  llm/          gemini_client.py, agent.py, tools.py, schemas.py (placeholders)
-  reasoning/    citations.py, abstention.py (placeholders)
-  evaluation/   metrics.py (evidence-gated Recall@K/MRR); run.py (final QA evaluation placeholder)
-  templates/    library.html, investigate.html (static notices only)
-  static/       CSS and browser assets (future)
-migrations/     schema.sql (additive halfvec, offsets, title-weighted FTS and RLS schema)
-scripts/        audit_hotpotqa.py; ingest_hotpotqa.py (capped at 1,000); retrieve.py; evaluate_retrieval.py; measure_db_size.py
-eval/           versioned evaluation cases (future)
-tests/          automated tests
-reports/        sanitized probes and AI usage disclosure
-docs/           public technical requirements, roadmap, and architecture
+Browser
+  -> FastAPI validation and body-size bound
+  -> process-local IP/daily/concurrency admission checks
+  -> worker thread: one fail-closed Frankfurt DB connection
+  -> up to four Gemini-selected read tools / five HTTP attempts total
+  -> semantic retrieval by default using the startup-loaded BGE model
+  -> citation and exact-quote validation against retrieved chunk IDs
+  -> public response containing verified claims and source evidence only
 ```
 
-Current request path: client -> FastAPI app -> health router -> JSON response. The
-health route checks process liveness only. The Render startup check loads one
-FastEmbed model and logs aggregate measurements; it is not an HTTP diagnostics
-route. Gemini and read-only database probes remain explicit commands. A local
-ingestion CLI embeds the first 1,000 unique corpus paragraphs and writes them to
-Supabase through psycopg. Local retrieval CLIs provide pgvector, FTS, and
-Weighted RRF search with source provenance; no HTTP retrieval route was added.
-The Phase 1E schema keeps canonical text in `documents.full_text`; chunks store
-Unicode character offsets and `halfvec(384)` values. Retrieval reconstructs
-the original chunk excerpt from the canonical text. `document_sources` retains
-all aliases and evidence sentences. A per-chunk English `tsv` gives title
-aliases weight A and body text weight B; source-title and document-text changes
-refresh those vectors. GIN indexes FTS and HNSW on `halfvec_cosine_ops` is built
-by the bounded ingestion CLI only after the 1,000-row load.
+One `GeminiClient` and one FastEmbed model instance are loaded during the
+application lifespan and reused across requests. Each investigation opens one
+database connection and reuses it for its tool calls. A tool runs in a bounded
+transaction with a PostgreSQL statement timeout; the transaction is closed
+before the next Gemini HTTP request. The connection closes after the
+investigation. This avoids sharing a psycopg connection concurrently and
+prevents idle open transactions during model calls.
 
-All EvidenceAI DB connections validate the Supabase project reference against
-`nldnpqhqrfwjgxcqeuru` before connecting. This is the configured Frankfurt
-Evidence_AI target; Sydney remains a fallback and is not used by the app. The
-three tables use RLS; `PUBLIC`,
-`anon`, and `authenticated` have no table grants. Direct database credentials
-remain backend-only. The previous Mindo project is not used by the app. Live
-measurements and limitations are in `reports/phase_1e_optimized.md`.
+The existing agent remains bounded at four investigation steps and five actual
+Gemini HTTP attempts, including retries. Every request has a configurable
+timeout and output-token cap. The API maps upstream/database failures to
+generic public errors and logs only sanitized error types. Internal traces,
+questions, API keys, and database URLs are not returned to the browser.
 
-Gemini answer generation and citation entailment checks remain unimplemented.
-Exact text matching confirms that a sentence appears in a source; it does not
-prove that the source entails a generated claim.
+The existing two-level citation validator verifies that each cited chunk was
+retrieved and that its quote is present verbatim after whitespace
+normalization. Chunk text is reconstructed from canonical document text and
+stored offsets. Unsupported claims are removed; if the central claim cannot be
+verified, the agent abstains. Quote presence is not a factual-entailment test.
+
+## Abuse limits and quota behavior
+
+The API enforces a 16 KiB JSON body limit, strict question validation, a
+per-IP rolling request limit, a daily investigation budget, and a concurrent
+request cap. Reservations are atomic within a Python process; each admitted
+investigation reserves one daily unit, even if it fails, because an upstream
+request may already have consumed quota. An investigation may make up to five
+Gemini HTTP requests.
+
+These counters live only in process memory. They reset after restart/spin-down
+and are not shared across multiple workers or instances. Therefore they are a
+temporary safeguard, not a restart-proof global daily cap. The default
+`INVESTIGATION_DAILY_BUDGET=0` fails closed and disables investigations until an
+operator checks the actual Gemini project's model quota and configures a
+conservative value. No Redis service or database table was provisioned. A
+durable cap would require a separate approval for an atomic daily counter in
+PostgreSQL or a managed shared store.
+
+The per-IP key uses the ASGI client address after Uvicorn's forwarded-header
+handling. The Frankfurt Render start command enables proxy headers for the
+Render reverse proxy. Do not expose this service behind a different proxy
+without verifying which client address reaches the limiter.
+
+## Memory and hosting
+
+At startup, sanitized current and high-water process RSS are logged after the
+embedding model is loaded. While investigations run, a background sampler
+records per-request before/after RSS and a 50 ms sampled peak, including peak
+concurrency. A short allocation can fall between samples, so the report labels
+this as sampled RSS. The Render Free ceiling is 512 MiB; startup-only numbers
+do not prove request-time memory safety. Three real consecutive investigations
+and a two-request overlap must be measured from actual Render logs before that
+gate can pass.
+
+The Frankfurt blueprint uses a project-local FastEmbed cache downloaded at
+build time and loaded offline at runtime. Render Free may spin down after
+inactivity; the interface displays the requested cold-start note. This note
+cannot display during the delay before the first HTML response.
+
+## Data and evaluation boundaries
+
+The approved Phase 5 run records 50,000 documents, 50,018 provenance rows, and
+50,000 chunks; its measured storage and integrity evidence is in
+`reports/capacity_50k.md`. The current investigation code does not write to
+those tables. The 200-question retrieval development set is the sole set for
+retrieval tuning. The 40 held-out evaluation candidates are not used by the
+agent or this interface.
+
+The dedicated Frankfurt Supabase project is
+`nldnpqhqrfwjgxcqeuru`. Database connections fail closed unless the configured
+Supabase URL identifies that project. Mindo and the former Sydney project are
+not used by the application.
+
+## Current verification boundary
+
+Local API contract and scripted-agent tests exercise successful citation
+validation and abstention over HTTP. They do not substitute for a live Gemini
+quota check, live public Render request, Render memory measurement, or a
+post-idle cold-start test. See `reports/phase4a_web_app.md` for the exact
+verified results and pending operator actions.

@@ -7,11 +7,13 @@ from app.config import Settings
 from app.db.connection import EXPECTED_SUPABASE_PROJECT_REF, connect_database, project_ref_from_database_url
 from app.llm.agent import investigate
 from app.llm.gemini_client import GeminiClient
+from app.llm.agent import RetrievalMode
 from app.model_cache import load_model
 
 
 def run_investigation(question: str, *, settings: Settings | None = None, model: Any | None = None,
-                      llm_client: Any | None = None) -> dict[str, Any]:
+                      llm_client: Any | None = None,
+                      retrieval_mode: RetrievalMode = "semantic") -> dict[str, Any]:
     """Open one fail-closed Supabase connection and reuse it for every tool call."""
     settings = settings or Settings.load()
     if project_ref_from_database_url(settings.database_url) != EXPECTED_SUPABASE_PROJECT_REF:
@@ -32,6 +34,9 @@ def run_investigation(question: str, *, settings: Settings | None = None, model:
     try:
         result = investigate(
             question, conn=conn, embedding_model=embedding_model, llm_client=client,
+            retrieval_mode=retrieval_mode,
+            database_statement_timeout_ms=settings.database_statement_timeout_ms,
+            deadline=total_started + settings.investigation_timeout_seconds,
             started_at=total_started, database_connection_seconds=connection_seconds,
             model_initialization_seconds=model_seconds,
         )

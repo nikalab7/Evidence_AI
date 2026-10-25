@@ -148,3 +148,23 @@ Local planning and personal preparation notes are excluded from the repository.
 - Codex assistance was used to diagnose PostgreSQL full-text retrieval latency, implement a backward-compatible informative-term keyword strategy, and build a repeatable development-set tuning runner. The project owner specified the candidate approaches, dataset boundary, and evaluation requirements.
 - SQL diagnosis, threshold selection, and the eight-configuration RRF comparison used only the 200-question `eval/retrieval_dev.jsonl` development set. The held-out candidate file was not opened or used. Database benchmarking was read-only against Frankfurt; no schema or index changes were made.
 - The measured 0.05 informative-term cutoff improved keyword Recall@10 to 0.455 on the development set. Semantic-only remained the recommended default based on higher Recall@10/MRR and lower latency than positive-keyword hybrid variants. Results and limitations are in `reports/retrieval_tuning_50k.md`.
+
+## Phase 4A web application addition - 2026-10-25
+
+- Codex assistance was used to connect the existing bounded Gemini investigation
+  agent, semantic-default retrieval, and citation validator to a FastAPI JSON
+  endpoint and same-service responsive page. The owner specified scope,
+  retrieval default, safety restrictions, and deployment gates.
+- Added strict question/body validation, configurable token and timeout bounds,
+  atomic process-local per-IP/daily/concurrency limits, startup and sampled
+  request RSS logging, and sanitized HTTP errors. No dependency, schema, corpus,
+  Gemini-agent step budget, or evaluation dataset was changed.
+- API tests exercise a successful exact-quote citation and an insufficient-
+  evidence result over the HTTP route using scripted Gemini responses and a
+  fake database connection. These tests verify local application behavior but
+  are not live Gemini or Supabase verification.
+- The Gemini quota dashboard and Render service were not accessible from the
+  workspace. The daily budget remains zero (API disabled) until the owner
+  checks quota and configures a safe cap. Request-time Render RSS, public URL,
+  cold start, and two-live-request checks remain pending; see
+  `reports/phase4a_web_app.md`.

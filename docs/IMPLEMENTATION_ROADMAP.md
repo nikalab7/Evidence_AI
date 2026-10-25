@@ -18,12 +18,19 @@ deployment memory have been checked.
 7. **Deployment and handoff:** public hosting, persistence checks, setup guide,
    evaluation report, and AI usage report.
 
-The current repository implements the foundation, service probes, a read-only
-HotpotQA corpus/evidence audit, verified 100- and 1,000-document Supabase
-ingestion milestones, and the Phase 2 semantic/FTS/Weighted RRF retrieval
-baseline. The 200-question dev evaluation includes only its 82 cases with full
-supporting title-and-sentence evidence in indexed chunks. The 10K/50K storage
-projections remain estimates and the full dataset has not been ingested.
-Remaining Phase 1 work includes other file parsers, the second chunking strategy
-and its comparison, and further capacity checks. Gemini investigation, final
-answer evaluation, and user-facing document routes remain incomplete.
+## Current verified milestone state
+
+- Phase 5 staged ingestion reached 50,000 documents on the Frankfurt project;
+  consult `reports/capacity_50k.md` for measured counts, storage, and checks.
+- Phase 6A retrieval tuning is complete using only the 200-question development
+  set; the 40 final candidates remain held out. See
+  `reports/retrieval_tuning_50k.md`.
+- The existing bounded Gemini investigation agent and citation validator are
+  reused by the Phase 4A web application. Semantic retrieval is the public
+  default; keyword and hybrid remain selectable.
+- Phase 4A local application code and HTTP tests are implemented in this
+  milestone. Public Render deployment, actual Gemini quota inspection, and
+  request-time Render memory checks remain pending. The zero daily budget keeps
+  the endpoint disabled until an operator configures a quota-based limit.
+- Document upload/CRUD and held-out final answer evaluation remain separate
+  milestones; this web milestone does not modify the corpus or evaluation data.

@@ -4,7 +4,11 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0, Phase 1C/1D, Phase 1E, and Phase 2 retrieval are implemented. EvidenceAI now uses dedicated Frankfurt Supabase project `nldnpqhqrfwjgxcqeuru`; Sydney project `csenhlrsttuukzwglttf` remains a fallback, and the Mindo project is not used by this application. The Frankfurt database has 1,000 content-addressed documents, 1,001 provenance rows, and 1,000 paragraph chunks with 384-dimensional halfvec BGE embeddings. Chunk text is reconstructed from offsets into canonical document text. The 200-question retrieval-dev set has 82 cases with complete supporting evidence. Frankfurt retrieval, investigation, storage, and region-latency measurements are in [`reports/region_migration.md`](reports/region_migration.md); earlier Sydney measurements remain historical in [`reports/phase_1e_optimized.md`](reports/phase_1e_optimized.md) and [`reports/hybrid_retrieval.md`](reports/hybrid_retrieval.md). No more than 1,000 documents have been ingested. The 10K/50K storage figures remain estimates, not capacity verification. The separate Render Frankfurt Blueprint is prepared but has not been deployed. Gemini RAG API endpoints, document CRUD APIs, and the user-facing demo remain incomplete. See [`reports/capacity_1000.md`](reports/capacity_1000.md).
+Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
+
+This Phase 4A change adds a single-service FastAPI investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. `INVESTIGATION_DAILY_BUDGET=0` is the fail-closed default until an operator checks Gemini project quota and selects a limit. These in-memory limits reset on process restart and are not a durable global quota.
+
+The Frankfurt Render Blueprint remains a separate service configuration. Public deployment, live Gemini quota inspection, and post-deploy RSS checks are pending because this workspace has no Render service access or Google quota-dashboard access. Do not describe the demo as publicly deployed until those checks are recorded in [`reports/phase4a_web_app.md`](reports/phase4a_web_app.md).
 
 ## Project structure
 
@@ -13,14 +17,17 @@ evidence-ai/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                 FastAPI entry point
-│   ├── lifespan.py             Optional startup-only embedding smoke check
+│   ├── lifespan.py             Shared model/client lifetime and startup RSS
+│   ├── memory_monitor.py       Sampled per-investigation process RSS
+│   ├── rate_limit.py           Atomic process-local request budgets
 │   ├── embedding_smoke.py      FastEmbed dimensions, timing, and RSS
 │   ├── model_cache.py          Offline FastEmbed cache loader
 │   ├── config.py               Environment configuration
 │   ├── api/
 │   │   ├── health.py           Working liveness route
 │   │   ├── documents.py        Placeholder
-│   │   └── investigations.py   Placeholder
+│   │   ├── investigations.py   Validated investigation API
+│   │   └── pages.py            Server-rendered public interface
 │   ├── db/
 │   │   ├── connection.py       TLS psycopg connection from environment settings
 │   │   └── queries.py          Parameterized ingestion, retrieval, verification, and size queries
@@ -39,26 +46,26 @@ evidence-ai/
 │   │   ├── keyword.py           PostgreSQL FTS retrieval
 │   │   └── ranker.py            Weighted Reciprocal Rank Fusion
 │   ├── llm/
-│   │   ├── gemini_client.py     Placeholder; service probe is separate
-│   │   ├── agent.py             Placeholder
-│   │   ├── tools.py             Placeholder
-│   │   └── schemas.py           Placeholder
+│   │   ├── gemini_client.py     Bounded Gemini REST client
+│   │   ├── agent.py             Four-step evidence investigation loop
+│   │   ├── tools.py             Read-only semantic/keyword/hybrid tools
+│   │   └── schemas.py           Structured request and response schemas
 │   ├── reasoning/
-│   │   ├── citations.py         Placeholder
-│   │   └── abstention.py        Placeholder
+│   │   ├── citations.py         Retrieved-chunk and exact-quote validation
+│   │   └── abstention.py        Insufficient-evidence response
 │   ├── evaluation/
 │   │   ├── metrics.py           Evidence-gated Recall@K and MRR
 │   │   └── run.py               Placeholder
 │   ├── templates/
 │   │   ├── library.html         Static notice
-│   │   └── investigate.html     Static notice
-│   └── static/                  Future CSS and JavaScript
+│   │   └── investigate.html     Responsive investigation interface
+│   └── static/                  Inline page styling and behavior
 ├── migrations/schema.sql        Additive documents, provenance, chunks, FTS, and vector schema
 ├── scripts/
 │   ├── audit_hotpotqa.py       Streaming uniqueness/evidence audit
 │   ├── build_corpus.py          Local corpus selection and coverage report
 │   ├── download_model.py        Render build-time FastEmbed cache
-│   ├── ingest_hotpotqa.py       Supabase ingestion CLI capped at 1,000 documents
+│   ├── ingest_hotpotqa.py       Staged Supabase ingestion CLI capped at 50,000 documents
 │   ├── retrieve.py              Natural-language semantic/keyword/hybrid CLI
 │   ├── evaluate_retrieval.py    Evidence-gated real Supabase retrieval evaluation
 │   └── measure_db_size.py       Read-only database/table size and row counts
@@ -91,9 +98,10 @@ python -m scripts.audit_hotpotqa --output reports\hotpotqa_audit.json
 
 The source-pool scan found 507,494 title-plus-paragraph records across train
 and validation. The fixed-seed content-hash subset has been materialized: the
-200-question retrieval set is committed, and the 50,000-document corpus remains
-local and Git-ignored. Exactly 1,000 corpus documents are currently in Supabase;
-larger staged loads remain open and 10K/50K capacity figures are estimates.
+200-question retrieval set is committed; the reproducible 50,000-record source
+corpus remains local and Git-ignored. The Frankfurt database reached 50,000
+documents in the approved staged run. Recorded counts, sizes, and limits are in
+`reports/capacity_50k.md`.
 
 The selected local subset and its reproducibility record are in
 [`reports/corpus_audit.json`](reports/corpus_audit.json). Sampling and identity
@@ -113,9 +121,9 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python -m uvicorn app.main:app --reload
 ```
 
-The server runs at `http://127.0.0.1:8000`; `GET /health` returns `{"status":"ok"}`. The health endpoint checks only that the API process responds. It does not claim Gemini or database health.
+The server runs at `http://127.0.0.1:8000`; `GET /` serves the interface, `POST /api/investigate` runs an investigation, and `GET /health` returns `{"status":"ok"}`. Health checks process liveness only. For local investigations, set a small positive `INVESTIGATION_DAILY_BUDGET` only after checking the configured Gemini project's quota. The default value `0` intentionally disables the API.
 
-Keep real credentials in `.env`, which Git ignores. `.env.example` contains names only. `connect_database()` refuses Supabase URLs that do not identify project `nldnpqhqrfwjgxcqeuru`; keep `DATABASE_URL` backend-only and configure the Frankfurt URI as a secret on the new Render service before deployment. `render.frankfurt.yaml` defines the separate service; the existing service is not replaced. The local `app.preflight` command lists remaining gates and exits with code 1 while full ingestion is not cleared.
+Keep real credentials in `.env`, which Git ignores. `.env.example` contains names only. `connect_database()` refuses Supabase URLs that do not identify project `nldnpqhqrfwjgxcqeuru`; keep `DATABASE_URL` backend-only and configure the Frankfurt URI as a secret on the new Render service before deployment. `render.frankfurt.yaml` defines the separate service; the existing service is not replaced.
 
 ## Service probes
 
@@ -124,33 +132,33 @@ Keep real credentials in `.env`, which Git ignores. `.env.example` contains name
 .\.venv\Scripts\python -m app.service_probe --only database --enable-vector --output reports/database_probe.json
 ```
 
-The first command lists available generation models and makes at most one small Gemini request. The second checks Supabase and `pgvector` without spending Gemini quota. Reports omit credentials and raw service error bodies. A successful connection and current database size do not prove that 50,000 records will fit.
+The first command lists available generation models and makes at most one small Gemini request. The second checks Supabase and `pgvector` without spending Gemini quota. Reports omit credentials and raw service error bodies. Refer to the Phase 5 report for measured 50K capacity rather than treating a general service probe as a capacity test.
 
-The older database probe and capacity report describe the Mindo project and are historical. EvidenceAI was moved to its dedicated project for Phase 1E; actual schema, access controls, row counts, sizes, storage estimates, and retrieval comparisons are recorded in [`reports/phase_1e_optimized.md`](reports/phase_1e_optimized.md). The 10K/50K capacity projections are estimates, not capacity verification. Render's baseline FastEmbed startup check passed with a 384-dimensional vector and 300,912,640 bytes peak process RSS; verify the Render environment points to the new project before deploying database-backed features. See the reports in `reports/`.
+The older database probe describes the Mindo project and is historical. EvidenceAI uses its Frankfurt project. Actual 50K row counts, sizes, and indexes are recorded in [`reports/capacity_50k.md`](reports/capacity_50k.md); Frankfurt retrieval results are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The earlier Render FastEmbed startup measurement is a baseline only; it does not establish memory safety for live investigations.
 
 ## Render embedding preflight
 
-`render.yaml` configures a minimal Python web service and a startup-only
-FastEmbed check. On each process start it loads `BAAI/bge-small-en-v1.5`, embeds
-one query, and writes dimensions, load time, query latency, and process RSS to
-service logs. `/health` remains a cheap liveness check; model measurements are
-not exposed by an HTTP route. Swagger and OpenAPI routes are disabled.
+`render.frankfurt.yaml` configures a distinct Frankfurt Python web service,
+preloads the FastEmbed cache at build time, then starts FastAPI with proxy
+headers enabled for Render's client-IP rate limit. On each process start the
+app logs sanitized RSS after model initialization. Each active investigation
+also logs before/after RSS, a 50 ms sampled peak, and peak concurrent requests.
+The startup number alone is not a memory safety result; measure three real
+requests and a two-request overlap on the deployed service. Swagger and OpenAPI
+routes are disabled.
 
-The build command runs `scripts/download_model.py` into the project-local
-`.model_cache/` directory and verifies a second model load with network access
-disabled. Runtime uses that same cache with `local_files_only=True`, so a missing
-model fails startup instead of downloading unexpectedly. The current build
-script and a local lifespan startup with `/health` returned 200; verify the new
-artifact and startup log after manually deploying the Blueprint to Render.
+The build command runs `scripts/download_model.py` into `.model_cache/` and
+verifies offline loading. Runtime uses that same cache with
+`local_files_only=True`, so a missing model fails startup instead of downloading.
+The public page includes the free-hosting cold-start notice; it cannot appear
+until the server has responded with the initial HTML.
 
-Create a Blueprint from this repository in Render to run the preflight. No
-Gemini or Supabase secret is required for this isolated check. Render's Free
-filesystem is ephemeral. The model cache is included by the build step in the
-deployed artifact; runtime does not fetch model files after a restart or
-spin-down.
-Automatic deploys are disabled in the Blueprint; start the first deployment
-from Render, then use the same service's restart action for the second check.
-The actual Render startup measurements, local baseline, and pending restart
-check are recorded in [reports/render_preflight.md](reports/render_preflight.md).
+The Frankfurt Blueprint has automatic deploys disabled and requires the owner to
+set `DATABASE_URL`, `GEMINI_API_KEY`, and a quota-checked positive daily budget.
+Its current budget is `0`, which disables investigation requests. After deploy,
+record actual region, cold-start behavior, health response, RSS, and three
+consecutive plus two concurrent real investigations. The previous embedding
+preflight is documented in [reports/render_preflight.md](reports/render_preflight.md);
+Phase 4A gates are tracked in [reports/phase4a_web_app.md](reports/phase4a_web_app.md).
 
 An exact quote match shows that text occurs in a source; factual entailment requires a separate check.

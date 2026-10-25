@@ -68,8 +68,9 @@ def test_process_rss_reader_returns_a_value_on_supported_platforms():
         assert peak_rss >= rss
 
 
-def test_public_api_has_only_health_and_no_schema_docs():
+def test_public_api_serves_interface_and_health_without_schema_docs():
     with TestClient(app) as client:
+        assert client.get("/").status_code == 200
         assert client.get("/health").json() == {"status": "ok"}
         assert client.get("/docs").status_code == 404
         assert client.get("/openapi.json").status_code == 404
@@ -87,10 +88,15 @@ def test_startup_smoke_logs_metrics_not_vectors_or_secrets(monkeypatch, caplog):
     }))
     with TestClient(app):
         pass
-    logs = "".join(record.getMessage() for record in caplog.records)
-    payload = next(json.loads(line) for line in logs.splitlines()
-                   if '"event": "fastembed_startup_check"' in line)
+    messages = [record.getMessage() for record in caplog.records]
+    payload = next(json.loads(message) for message in messages
+                   if '"event": "fastembed_startup_check"' in message)
+    startup_memory = next(json.loads(message) for message in messages
+                          if '"event": "application_startup_memory"' in message)
     assert payload["status"] == "passed"
     assert payload["dimensions"] == 384
+    assert startup_memory["rss_bytes"] > 0
+    assert startup_memory["peak_rss_bytes"] >= startup_memory["rss_bytes"]
+    logs = "\n".join(messages)
     assert token not in logs
     assert "0.0, 0.0" not in logs

@@ -14,7 +14,7 @@ class ScriptedLLM:
         self.calls = []
         self.settings = type("Settings", (), {"gemini_model": "gemini-3.5-flash-lite"})()
 
-    def generate(self, messages, *, tools=None, schema=None, request_budget=1):
+    def generate(self, messages, *, tools=None, schema=None, request_budget=1, deadline=None):
         self.calls.append({"tools": tools, "schema": schema, "budget": request_budget})
         return next(self.responses)
 

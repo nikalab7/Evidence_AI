@@ -29,13 +29,13 @@ class GeminiAPIError(RuntimeError):
 class GeminiClient:
     def __init__(
         self, settings: Settings, *, client: httpx.Client | None = None,
-        timeout_seconds: float = 25.0, max_retries: int = 1,
+        timeout_seconds: float | None = None, max_retries: int = 1,
     ):
         self.settings = settings
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = timeout_seconds or settings.gemini_request_timeout_seconds
         self.max_retries = max_retries
         self._owns_client = client is None
-        self.client = client or httpx.Client(timeout=timeout_seconds, follow_redirects=False)
+        self.client = client or httpx.Client(timeout=self.timeout_seconds, follow_redirects=False)
 
     def close(self) -> None:
         if self._owns_client:
@@ -52,6 +52,7 @@ class GeminiClient:
         tools: list[dict[str, Any]] | None = None,
         schema: dict[str, Any] | None = None,
         request_budget: int = 1,
+        deadline: float | None = None,
     ) -> LLMResponse:
         """Generate content; each HTTP attempt consumes one investigation call."""
         if not self.settings.gemini_api_key:
@@ -61,16 +62,26 @@ class GeminiClient:
         model = (self.settings.gemini_model or DEFAULT_GEMINI_MODEL).removeprefix("models/")
         if not _MODEL_RE.fullmatch(model):
             raise GeminiAPIError("invalid_model_name", [])
-        body = request_body(messages, tools, schema)
+        body = request_body(
+            messages, tools, schema,
+            max_output_tokens=self.settings.gemini_max_output_tokens,
+        )
         metrics: list[dict[str, Any]] = []
         max_attempts = min(self.max_retries + 1, request_budget)
         for attempt in range(1, max_attempts + 1):
+            timeout_seconds = self.timeout_seconds
+            if deadline is not None:
+                remaining_seconds = deadline - time.perf_counter()
+                if remaining_seconds <= 0:
+                    raise GeminiAPIError("investigation_timeout", metrics) from None
+                timeout_seconds = min(timeout_seconds, remaining_seconds)
             started = time.perf_counter()
             status = None
             try:
                 response = self.client.post(
                     f"{API_BASE}/models/{model}:generateContent",
                     headers={"x-goog-api-key": self.settings.gemini_api_key}, json=body,
+                    timeout=timeout_seconds,
                 )
                 status = response.status_code
                 response.raise_for_status()
@@ -99,5 +110,8 @@ class GeminiClient:
             metrics.append(request_metric(attempt, time.perf_counter() - started, status, {}))
             if not retryable or attempt == max_attempts:
                 raise GeminiAPIError(reason, metrics, status) from None
-            time.sleep(min(0.1 * (2 ** (attempt - 1)), 0.3))
+            backoff = min(0.1 * (2 ** (attempt - 1)), 0.3)
+            if deadline is not None and time.perf_counter() + backoff >= deadline:
+                raise GeminiAPIError("investigation_timeout", metrics, status) from None
+            time.sleep(backoff)
         raise GeminiAPIError("request_budget_exhausted", metrics)

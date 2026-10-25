@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -30,6 +32,7 @@ def test_function_call_request_uses_configured_model_and_header_secret():
     assert requests[0].url.path.endswith("/models/gemini-3.5-flash-lite:generateContent")
     body = requests[0].read().decode()
     assert "systemInstruction" in body and "search_evidence" in body
+    assert json.loads(body)["generationConfig"]["maxOutputTokens"] == 1024
     assert result.function_calls[0].call_id == "call-1"
     assert result.usage["promptTokenCount"] == 10
     assert result.usage["candidatesTokenCount"] == 2

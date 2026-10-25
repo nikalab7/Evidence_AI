@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from app.config import DEFAULT_GEMINI_MODEL
 from app.llm.agent_support import SYSTEM_PROMPT, add_usage, finish, record_requests, trace_arguments
@@ -18,9 +18,29 @@ from app.llm.tools import TOOL_DECLARATIONS, execute_tool
 from app.reasoning.citations import validate_final_response
 
 
+RetrievalMode = Literal["semantic", "keyword", "hybrid"]
+
+
+class InvestigationTimeout(TimeoutError):
+    """Raised when an investigation reaches its configured wall-clock deadline."""
+
+
+def _check_deadline(deadline: float | None) -> None:
+    if deadline is not None and time.perf_counter() >= deadline:
+        raise InvestigationTimeout("investigation timed out")
+
+
+def _close_read_transaction(conn: Any) -> None:
+    if getattr(conn, "in_transaction", False):
+        conn.rollback()
+
+
 def investigate(
     question: str, *, conn: Any, embedding_model: Any, llm_client: Any,
     filters: dict[str, str] | None = None,
+    retrieval_mode: RetrievalMode = "semantic",
+    database_statement_timeout_ms: int = 12_000,
+    deadline: float | None = None,
     started_at: float | None = None,
     database_connection_seconds: float = 0.0,
     model_initialization_seconds: float = 0.0,
@@ -48,11 +68,21 @@ def investigate(
     while tool_calls < MAX_INVESTIGATION_STEPS and api_calls < MAX_LLM_REQUESTS - 1:
         budget = MAX_LLM_REQUESTS - api_calls - 1  # reserve one request for structured final output
         try:
-            response = llm_client.generate(messages, tools=TOOL_DECLARATIONS, request_budget=budget)
+            _check_deadline(deadline)
+            _close_read_transaction(conn)
+            response = llm_client.generate(
+                messages, tools=TOOL_DECLARATIONS, request_budget=budget,
+                deadline=deadline,
+            )
         except GeminiAPIError as exc:
             api_calls = record_requests(trace, api_calls, exc.request_metrics)
+            if exc.reason == "investigation_timeout" or (
+                deadline is not None and time.perf_counter() >= deadline
+            ):
+                raise InvestigationTimeout("investigation timed out") from None
             generation_error = exc.reason
             break
+        _check_deadline(deadline)
         api_calls = record_requests(trace, api_calls, response.request_metrics)
         add_usage(usage, response.usage)
         messages.append({"role": "model", "parts": response.model_content.get("parts", [])})
@@ -69,11 +99,16 @@ def investigate(
             safe_args = function.arguments if isinstance(function.arguments, dict) else {}
             tool_started = time.perf_counter()
             try:
+                _check_deadline(deadline)
                 result, timing = execute_tool(
                     conn, embedding_model, function.name, safe_args,
                     retrieved=retrieved, filters=filters,
+                    retrieval_mode=retrieval_mode,
+                    database_statement_timeout_ms=database_statement_timeout_ms,
                 )
                 outcome = "error" if "error" in result else "ok"
+            except InvestigationTimeout:
+                raise
             except Exception as exc:
                 result, outcome = {"error": "tool_execution_failed"}, "error"
                 timing = {"tool": function.name,
@@ -108,14 +143,22 @@ def investigate(
         )}]})
         while api_calls < MAX_LLM_REQUESTS:
             try:
+                _check_deadline(deadline)
+                _close_read_transaction(conn)
                 response = llm_client.generate(
                     messages, schema=FINAL_RESPONSE_SCHEMA,
                     request_budget=MAX_LLM_REQUESTS - api_calls,
+                    deadline=deadline,
                 )
             except GeminiAPIError as exc:
                 api_calls = record_requests(trace, api_calls, exc.request_metrics)
+                if exc.reason == "investigation_timeout" or (
+                    deadline is not None and time.perf_counter() >= deadline
+                ):
+                    raise InvestigationTimeout("investigation timed out") from None
                 generation_error = exc.reason
                 break
+            _check_deadline(deadline)
             api_calls = record_requests(trace, api_calls, response.request_metrics)
             add_usage(usage, response.usage)
             try:

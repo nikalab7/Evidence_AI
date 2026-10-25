@@ -1,5 +1,206 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Investigate | EvidenceAI</title></head>
-  <body><main><h1>Investigation Workspace</h1><p>Question answering and source views are not implemented yet.</p></main></body>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b1220">
+    <title>EvidenceAI | Investigate</title>
+    <style>
+      :root { color-scheme: dark; --bg:#0b1220; --panel:#111c2e; --border:#26364d; --text:#edf4ff; --muted:#aabbd1; --accent:#73d2bd; --warning:#f6ce78; --danger:#ff9a9a; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:radial-gradient(ellipse at 15% 0%,#18334a 0,transparent 42%),var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+      main { width:min(920px,calc(100% - 32px)); margin:0 auto; padding:42px 0 64px; }
+      .brand { display:flex; align-items:center; gap:12px; margin-bottom:28px; }
+      .mark { display:grid; place-items:center; width:42px; height:42px; border-radius:13px; background:var(--accent); color:#071721; font-weight:800; letter-spacing:-.06em; }
+      .brand-name { font-size:1.12rem; font-weight:750; letter-spacing:.01em; }
+      .corpus-count { color:var(--muted); font-size:.88rem; }
+      h1 { margin:0; font-size:clamp(2rem,5vw,3rem); line-height:1.08; letter-spacing:-.04em; }
+      .lead { max-width:690px; color:var(--muted); margin:14px 0 24px; }
+      .cold-note { padding:12px 15px; margin:0 0 22px; border:1px solid #42677c; border-radius:12px; background:#122a3a; color:#d8f2ff; font-size:.92rem; }
+      .panel { border:1px solid var(--border); border-radius:18px; background:rgba(17,28,46,.92); padding:clamp(18px,4vw,28px); box-shadow:0 18px 54px #0003; }
+      label { display:block; margin-bottom:8px; font-weight:650; }
+      textarea,select { width:100%; border:1px solid #3a4b63; border-radius:10px; background:#0c1626; color:var(--text); font:inherit; }
+      textarea { min-height:132px; resize:vertical; padding:13px 14px; }
+      select { padding:10px 12px; }
+      textarea:focus,select:focus,button:focus-visible,a:focus-visible { outline:3px solid #73d2bd88; outline-offset:2px; }
+      .controls { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; margin-top:16px; }
+      .mode { max-width:260px; }
+      .hint { color:var(--muted); font-size:.82rem; margin-top:6px; }
+      button { min-height:44px; border:0; border-radius:10px; padding:10px 20px; background:var(--accent); color:#08201c; font:inherit; font-weight:750; cursor:pointer; }
+      button:disabled { opacity:.62; cursor:wait; }
+      .status-line { display:flex; align-items:center; gap:10px; min-height:30px; margin:16px 0 0; color:var(--muted); }
+      [hidden] { display:none !important; }
+      .spinner { width:17px; height:17px; border:2px solid #9cb3c777; border-top-color:var(--accent); border-radius:50%; animation:spin .75s linear infinite; }
+      @keyframes spin { to { transform:rotate(360deg); } }
+      .result { margin-top:24px; }
+      .result-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+      .result h2 { margin:0; font-size:1.25rem; }
+      .badge { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+      .badge.answered { border-color:#326b5e; color:#99e4cf; }
+      .badge.insufficient { border-color:#816a39; color:var(--warning); }
+      .badge.conflicting { border-color:#844d58; color:#ffb0b8; }
+      .answer { margin:0; font-size:1.06rem; white-space:pre-wrap; }
+      .claims { display:grid; gap:14px; margin-top:18px; }
+      .claim { border:1px solid var(--border); border-radius:12px; padding:16px; background:#0c1626; }
+      .claim-text { margin:0 0 12px; font-weight:650; }
+      details { border-top:1px solid #26364d; padding-top:10px; margin-top:10px; }
+      summary { color:#bfece1; cursor:pointer; font-size:.9rem; }
+      blockquote { margin:10px 0; padding:2px 0 2px 13px; border-left:3px solid var(--accent); color:#dce7f4; }
+      .citation-meta { display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:.82rem; }
+      .citation-meta a { color:#9fe7d7; }
+      code { font-size:.8em; color:#bdcbe0; overflow-wrap:anywhere; }
+      .conflicts { border-left:3px solid var(--danger); padding:10px 14px; background:#321d27; color:#ffdce0; border-radius:0 9px 9px 0; margin:14px 0; }
+      .insufficient-note { border-left:3px solid var(--warning); padding:10px 14px; background:#30291d; color:#ffebbd; border-radius:0 9px 9px 0; margin:14px 0; }
+      .error { margin-top:16px; padding:12px 14px; border:1px solid #844d58; border-radius:10px; color:#ffdce0; background:#321d27; }
+      footer { margin-top:22px; color:#8fa1b9; font-size:.82rem; }
+      @media (max-width:600px) { main { width:min(920px,calc(100% - 22px)); padding-top:26px; } .controls { grid-template-columns:1fr; } .mode { max-width:none; } button { width:100%; } .result-header { align-items:flex-start; flex-direction:column; } }
+      @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="brand">
+        <div class="mark" aria-hidden="true">E</div>
+        <div>
+          <div class="brand-name">EvidenceAI</div>
+          <div class="corpus-count">Searching __INDEXED_DOCUMENT_COUNT__ indexed records</div>
+        </div>
+      </header>
+
+      <h1>Investigate with evidence.</h1>
+      <p class="lead">Ask a question that needs information from one or more sources. EvidenceAI checks retrieved passages and shows the exact quotes used for each verified claim.</p>
+      <p class="cold-note">This demo runs on free hosting. The first visit after inactivity may take approximately one minute to load.</p>
+
+      <section class="panel" aria-labelledby="question-label">
+        <form id="investigation-form">
+          <label id="question-label" for="question">Your question</label>
+          <textarea id="question" name="question" minlength="3" maxlength="1000" required placeholder="Which system change affected payment processing, and what evidence links it to the incident?" autocomplete="off"></textarea>
+          <div class="controls">
+            <div class="mode">
+              <label for="retrieval-mode">Retrieval mode</label>
+              <select id="retrieval-mode" name="retrieval_mode">
+                <option value="semantic" selected>Semantic (recommended)</option>
+                <option value="keyword">Keyword</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+              <div class="hint">Semantic retrieval is the measured default for investigations.</div>
+            </div>
+            <button id="submit-button" type="submit">Investigate</button>
+          </div>
+        </form>
+        <div id="loading" class="status-line" role="status" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span><span>Searching sources and checking citations…</span></div>
+        <div id="error" class="error" role="alert" hidden></div>
+      </section>
+
+      <section id="result" class="panel result" aria-live="polite" hidden>
+        <div class="result-header"><h2>Investigation result</h2><span id="result-status" class="badge"></span></div>
+        <div id="insufficient" class="insufficient-note" hidden>EvidenceAI could not verify enough evidence to support a central answer.</div>
+        <div id="conflicts" class="conflicts" hidden></div>
+        <p id="answer" class="answer"></p>
+        <div id="claims" class="claims"></div>
+      </section>
+      <footer>EvidenceAI verifies citation presence and exact quotes. Quote matching alone does not prove that a source entails a claim.</footer>
+    </main>
+
+    <script>
+      (() => {
+        const form = document.getElementById("investigation-form");
+        const question = document.getElementById("question");
+        const button = document.getElementById("submit-button");
+        const loading = document.getElementById("loading");
+        const error = document.getElementById("error");
+        const result = document.getElementById("result");
+        const status = document.getElementById("result-status");
+        const answer = document.getElementById("answer");
+        const claims = document.getElementById("claims");
+        const conflicts = document.getElementById("conflicts");
+        const insufficient = document.getElementById("insufficient");
+
+        function element(tag, className, text) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        }
+
+        function renderResponse(data) {
+          result.hidden = false;
+          status.textContent = data.status;
+          status.className = `badge ${data.status}`;
+          answer.textContent = data.answer || "";
+          claims.replaceChildren();
+          insufficient.hidden = data.status !== "insufficient";
+          conflicts.hidden = data.status !== "conflicting";
+          conflicts.textContent = data.status === "conflicting"
+            ? "Retrieved sources contain incompatible, citation-verified claims. Review the quoted sources below."
+            : "";
+
+          for (const claim of (Array.isArray(data.claims) ? data.claims : [])) {
+            const card = element("article", "claim");
+            card.append(element("p", "claim-text", claim.text || ""));
+            for (const citation of (Array.isArray(claim.citations) ? claim.citations : [])) {
+              const details = element("details");
+              const chunk = typeof citation.chunk_id === "string" ? citation.chunk_id : "verified source";
+              details.append(element("summary", "", `Verified citation · ${chunk}`));
+              details.append(element("blockquote", "", citation.quote || ""));
+              const meta = element("div", "citation-meta");
+              const titles = Array.isArray(citation.titles) ? citation.titles : [];
+              if (titles.length) meta.append(element("span", "", `Source titles: ${titles.join("; ")}`));
+              for (const source of (Array.isArray(citation.sources) ? citation.sources : [])) {
+                if (typeof source.url === "string" && /^https?:\/\//i.test(source.url)) {
+                  const link = element("a", "", source.title || "Open source");
+                  link.href = source.url;
+                  link.target = "_blank";
+                  link.rel = "noopener noreferrer";
+                  meta.append(link);
+                }
+              }
+              details.append(meta);
+              card.append(details);
+            }
+            claims.append(card);
+          }
+        }
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          error.hidden = true;
+          error.textContent = "";
+          result.hidden = true;
+          loading.hidden = false;
+          button.disabled = true;
+          try {
+            const response = await fetch("/api/investigate", {
+              method: "POST",
+              headers: {"Content-Type": "application/json", "Accept": "application/json"},
+              body: JSON.stringify({
+                question: question.value,
+                retrieval_mode: document.getElementById("retrieval-mode").value,
+              }),
+              signal: AbortSignal.timeout(100000),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              const messages = {
+                422: "Enter a question between 3 and 1000 characters.",
+                429: data.detail || "The request limit was reached. Please try again shortly.",
+                503: data.detail || "The investigation service is temporarily unavailable.",
+                504: data.detail || "The investigation timed out. Please try again.",
+              };
+              throw new Error(messages[response.status] || "The investigation could not be completed.");
+            }
+            renderResponse(data);
+          } catch (failure) {
+            error.textContent = failure.name === "TimeoutError"
+              ? "This investigation took too long. Please try a shorter or more focused question."
+              : (failure.message || "A network error occurred. Please try again.");
+            error.hidden = false;
+          } finally {
+            loading.hidden = true;
+            button.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
 </html>

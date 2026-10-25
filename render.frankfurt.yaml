@@ -8,7 +8,7 @@ services:
     plan: free
     autoDeployTrigger: "off"
     buildCommand: pip install -r requirements.txt && python scripts/download_model.py
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -19,6 +19,22 @@ services:
         value: BAAI/bge-small-en-v1.5
       - key: GEMINI_MODEL
         value: gemini-3.5-flash-lite
+      - key: INVESTIGATION_DAILY_BUDGET
+        value: "0"
+      - key: INVESTIGATION_PER_IP_PER_MINUTE
+        value: "2"
+      - key: INVESTIGATION_MAX_CONCURRENT
+        value: "2"
+      - key: INVESTIGATION_TIMEOUT_SECONDS
+        value: "90"
+      - key: GEMINI_REQUEST_TIMEOUT_SECONDS
+        value: "15"
+      - key: GEMINI_MAX_OUTPUT_TOKENS
+        value: "1024"
+      - key: DATABASE_STATEMENT_TIMEOUT_MS
+        value: "12000"
+      - key: INDEXED_DOCUMENT_COUNT
+        value: "50000"
       - key: DATABASE_URL
         sync: false
       - key: GEMINI_API_KEY
