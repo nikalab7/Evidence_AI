@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 from logging import getLogger
 from time import perf_counter
@@ -18,6 +19,7 @@ from app.llm.agent import InvestigationTimeout
 from app.llm.service import run_investigation
 from app.memory_monitor import ProcessMemoryMonitor, RequestMemorySample
 from app.rate_limit import InvestigationLimiter, LimitRejection
+from app.reasoning.contradictions import verified_conflict_groups
 
 
 logger = getLogger("uvicorn.error")
@@ -45,10 +47,23 @@ class InvestigationRequest(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
+    """Use Cloudflare's single client-IP header; never trust X-Forwarded-For."""
+    forwarded_ips = request.headers.getlist("cf-connecting-ip")
+    if len(forwarded_ips) == 1:
+        try:
+            return str(ipaddress.ip_address(forwarded_ips[0].strip()))
+        except ValueError:
+            pass
+
+    # If the trusted edge header is missing or malformed, fail closed to the
+    # immediate peer address (which may group requests behind the Render proxy).
     client = request.client
     if client is None or not client.host:
         return "unknown"
-    return client.host
+    try:
+        return str(ipaddress.ip_address(client.host))
+    except ValueError:
+        return client.host
 
 
 def _limit_response(rejection: LimitRejection) -> HTTPException:
@@ -118,12 +133,11 @@ def _public_result(raw: Any) -> dict[str, Any]:
             "text": claim.get("text", ""),
             "citations": citations,
         })
-    conflict_groups = data.get("conflict_groups", [])
-    safe_groups = [
-        [item for item in group if isinstance(item, str)]
-        for group in conflict_groups
-        if isinstance(group, list)
-    ]
+    verified_claim_ids = {
+        claim["claim_id"] for claim in claims
+        if isinstance(claim.get("claim_id"), str)
+    }
+    safe_groups = verified_conflict_groups(data.get("conflict_groups"), verified_claim_ids)
     return {
         "status": data["status"],
         "answer": data.get("answer", ""),

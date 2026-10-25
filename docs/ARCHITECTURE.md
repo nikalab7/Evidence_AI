@@ -80,10 +80,14 @@ conservative value. No Redis service or database table was provisioned. A
 durable cap would require a separate approval for an atomic daily counter in
 PostgreSQL or a managed shared store.
 
-The per-IP key uses the ASGI client address after Uvicorn's forwarded-header
-handling. The Frankfurt Render start command enables proxy headers for the
-Render reverse proxy. Do not expose this service behind a different proxy
-without verifying which client address reaches the limiter.
+The per-IP key uses exactly one syntactically valid `CF-Connecting-IP` address.
+The Frankfurt Render start command disables Uvicorn proxy-header rewriting;
+the application ignores client-supplied `X-Forwarded-For`. If the Cloudflare
+header is missing or malformed, the limiter falls back to the immediate socket
+peer, which can group clients behind Render's proxy into one bucket. Render
+documents Cloudflare as the inbound edge, and Cloudflare documents
+`CF-Connecting-IP` as the visitor address it sends to the origin. This trust
+assumption must be rechecked if the service's edge/proxy path changes.
 
 ## Memory and hosting
 

@@ -168,3 +168,19 @@ Local planning and personal preparation notes are excluded from the repository.
   checks quota and configures a safe cap. Request-time Render RSS, public URL,
   cold start, and two-live-request checks remain pending; see
   `reports/phase4a_web_app.md`.
+
+## Phase 4A.1 production validation addition — 2026-10-25
+
+- Codex assistance was used to fix conflict-group serialization from the typed
+  investigation result through the public API, avoid repeating claim text in
+  the page while retaining citations, and harden per-IP limiting by ignoring
+  caller-controlled `X-Forwarded-For`, validating Cloudflare's single client-IP
+  header, and disabling Uvicorn proxy-header rewriting.
+- Added local regression tests and `reports/phase4a_1_production_validation.md`
+  with the owner-run live verification sequence. The full local suite passed
+  151 tests.
+- No Render deployment, public API request, Gemini call, or database query was
+  made: authenticated Render deployment/log access was not available. The
+  reported one-request production baseline and configured budget are owner-
+  supplied, not independently verified. Three sequential and two concurrent
+  request memory measurements remain pending.

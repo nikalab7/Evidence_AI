@@ -65,6 +65,7 @@ class InvestigationResult:
     claims: list[dict[str, Any]]
     central_claim_id: str | None
     trace: dict[str, Any]
+    conflict_groups: list[list[str]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

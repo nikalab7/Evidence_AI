@@ -51,8 +51,7 @@ def finish(verified: Mapping[str, Any] | None, trace: dict[str, Any],
         return InvestigationResult("insufficient", INSUFFICIENT_EVIDENCE_ANSWER, [], None, trace)
     return InvestigationResult(
         verified["status"], verified["answer"], verified["claims"],
-        verified["central_claim_id"], {**trace, **{
-            "conflict_groups": verified["conflict_groups"],
-            "dropped_claim_ids": verified["dropped_claim_ids"],
-        }},
+        verified["central_claim_id"],
+        {**trace, "dropped_claim_ids": verified["dropped_claim_ids"]},
+        conflict_groups=verified["conflict_groups"],
     )

@@ -139,10 +139,12 @@ The older database probe describes the Mindo project and is historical. Evidence
 ## Render embedding preflight
 
 `render.frankfurt.yaml` configures a distinct Frankfurt Python web service,
-preloads the FastEmbed cache at build time, then starts FastAPI with proxy
-headers enabled for Render's client-IP rate limit. On each process start the
-app logs sanitized RSS after model initialization. Each active investigation
-also logs before/after RSS, a 50 ms sampled peak, and peak concurrent requests.
+preloads the FastEmbed cache at build time, then starts FastAPI with Uvicorn
+proxy-header rewriting disabled. Rate limiting uses the
+Cloudflare-provided `CF-Connecting-IP`, not client-supplied `X-Forwarded-For`.
+On each process start the app logs sanitized RSS after model initialization.
+Each active investigation also logs before/after RSS, a 50 ms sampled peak,
+and peak concurrent requests.
 The startup number alone is not a memory safety result; measure three real
 requests and a two-request overlap on the deployed service. Swagger and OpenAPI
 routes are disabled.

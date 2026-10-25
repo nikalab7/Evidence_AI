@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 import json
+from time import perf_counter
 
 from fastapi.testclient import TestClient
 import pytest
 
 from app.config import Settings
-from app.llm.schemas import FunctionCall, LLMResponse
+from app.llm.schemas import FunctionCall, InvestigationResult, LLMResponse
 from app.main import app
 from app.rate_limit import InvestigationLimiter
 
@@ -102,6 +103,8 @@ def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     assert 'id="loading"' in page.text
     assert 'id="insufficient"' in page.text and 'id="conflicts"' in page.text
     assert "textContent" in page.text and "innerHTML" not in page.text
+    assert "normalizedAnswer.includes(normalizedClaim)" in page.text
+    assert "Verified citation" in page.text
     assert web_client.get("/health").json() == {"status": "ok"}
 
 
@@ -140,6 +143,7 @@ def test_http_investigation_runs_agent_and_returns_verified_citation(web_client,
     assert citation["sources"][0]["url"] == "https://example.test/incident"
     assert all(source.get("url") != "javascript:alert(1)" for source in citation["sources"])
     assert "trace" not in body and "api_usage" not in body
+    assert body["conflict_groups"] == []
     assert modes == ["semantic"]
     assert len(client.calls) == 3
 
@@ -164,7 +168,48 @@ def test_http_investigation_abstains_when_no_evidence_is_returned(web_client, mo
     assert response.status_code == 200
     assert response.json()["status"] == "insufficient"
     assert response.json()["claims"] == []
+    assert response.json()["conflict_groups"] == []
     assert response.json()["answer"]
+
+
+def test_conflict_groups_are_public_and_trace_remains_private(web_client, monkeypatch):
+    import app.api.investigations as api
+    from app.llm.agent_support import finish
+
+    result = finish(
+        {
+            "status": "conflicting",
+            "answer": "The retrieved sources conflict. One says enabled; another says disabled.",
+            "claims": [
+                {"claim_id": "claim-enabled", "text": "The feature is enabled.",
+                 "citations": [{"chunk_id": "chunk-1", "quote": "Feature: enabled."}]},
+                {"claim_id": "claim-disabled", "text": "The feature is disabled.",
+                 "citations": [{"chunk_id": "chunk-2", "quote": "Feature: disabled."}]},
+            ],
+            "central_claim_id": "claim-enabled",
+            "conflict_groups": [["claim-enabled", "claim-disabled"]],
+            "dropped_claim_ids": [],
+        },
+        {"tool_calls": [{"internal_query": "private trace"}],
+         "api_usage": {"internal": "private"}},
+        perf_counter(), "gemini-3.5-flash-lite",
+    )
+    assert isinstance(result, InvestigationResult)
+    assert result.conflict_groups == [["claim-enabled", "claim-disabled"]]
+    assert "conflict_groups" not in result.trace
+    result.conflict_groups.append(["claim-enabled", "not-a-verified-claim"])
+    monkeypatch.setattr(api, "run_investigation", lambda *_args, **_kwargs: result)
+
+    response = web_client.post("/api/investigate", json={"question": "Is the feature enabled?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "conflicting"
+    assert body["conflict_groups"] == [["claim-enabled", "claim-disabled"]]
+    assert [claim["claim_id"] for claim in body["claims"]] == ["claim-enabled", "claim-disabled"]
+    assert [claim["citations"][0]["chunk_id"] for claim in body["claims"]] == ["chunk-1", "chunk-2"]
+    assert "trace" not in body and "api_usage" not in body
+    assert "private trace" not in response.text and "internal" not in response.text
 
 
 @pytest.mark.parametrize("payload", [
@@ -209,6 +254,74 @@ def test_daily_limit_returns_public_429_message(web_client, monkeypatch):
     assert second.status_code == 429
     assert "limit" in second.json()["detail"]
     assert "Retry-After" in second.headers
+
+
+def test_per_ip_limit_cannot_be_bypassed_by_forged_x_forwarded_for(web_client, monkeypatch):
+    import app.api.investigations as api
+
+    web_client.app.state.investigation_limiter = InvestigationLimiter(
+        daily_budget=10, per_ip_per_minute=1, max_concurrent=2,
+    )
+    monkeypatch.setattr(api, "run_investigation", lambda *_args, **_kwargs: {
+        "status": "insufficient", "answer": "Not enough evidence.", "claims": [],
+        "conflict_groups": [], "trace": {},
+    })
+    edge_headers = {"CF-Connecting-IP": "203.0.113.21"}
+    first = web_client.post("/api/investigate", json={"question": "First forwarded request"},
+                            headers={**edge_headers, "X-Forwarded-For": "198.51.100.10"})
+    second = web_client.post("/api/investigate", json={"question": "Second forwarded request"},
+                             headers={**edge_headers, "X-Forwarded-For": "198.51.100.11"})
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert "Too many investigations" in second.json()["detail"]
+
+
+def test_client_ip_uses_single_cloudflare_header_or_socket_fallback():
+    from starlette.requests import Request
+    from app.api.investigations import _client_ip
+
+    def make_request(headers, peer):
+        return Request({
+            "type": "http", "method": "POST", "path": "/api/investigate",
+            "headers": [(key.lower().encode(), value.encode()) for key, value in headers],
+            "client": (peer, 44_321), "server": ("127.0.0.1", 8000),
+            "scheme": "http", "query_string": b"",
+        })
+
+    proxied = make_request([
+        ("cf-connecting-ip", "203.0.113.21"),
+        ("x-forwarded-for", "198.51.100.10, 198.51.100.11"),
+    ], "10.0.0.8")
+    forged_only = make_request([
+        ("x-forwarded-for", "198.51.100.99"),
+    ], "10.0.0.9")
+    duplicate_edge_headers = make_request([
+        ("cf-connecting-ip", "203.0.113.21"),
+        ("cf-connecting-ip", "203.0.113.22"),
+        ("x-forwarded-for", "198.51.100.99"),
+    ], "10.0.0.10")
+    malformed_edge_header = make_request([
+        ("cf-connecting-ip", "203.0.113.999"),
+        ("x-forwarded-for", "198.51.100.99"),
+    ], "10.0.0.11")
+
+    assert _client_ip(proxied) == "203.0.113.21"
+    assert _client_ip(forged_only) == "10.0.0.9"
+    assert _client_ip(duplicate_edge_headers) == "10.0.0.10"
+    assert _client_ip(malformed_edge_header) == "10.0.0.11"
+
+
+def test_frankfurt_start_command_disables_uvicorn_proxy_header_trust():
+    from pathlib import Path
+
+    blueprint = Path(__file__).resolve().parents[1] / "render.frankfurt.yaml"
+    start_command = next(
+        line for line in blueprint.read_text(encoding="utf-8").splitlines()
+        if "startCommand:" in line
+    )
+    assert "--no-proxy-headers" in start_command
+    assert " --forwarded-allow-ips=" not in start_command
+    assert " --proxy-headers " not in start_command
 
 
 def test_keyword_and_hybrid_modes_remain_explicitly_available(web_client, monkeypatch):

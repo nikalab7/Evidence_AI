@@ -8,7 +8,7 @@ services:
     plan: free
     autoDeployTrigger: "off"
     buildCommand: pip install -r requirements.txt && python scripts/download_model.py
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION

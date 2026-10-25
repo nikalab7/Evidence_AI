@@ -42,7 +42,9 @@
       .answer { margin:0; font-size:1.06rem; white-space:pre-wrap; }
       .claims { display:grid; gap:14px; margin-top:18px; }
       .claim { border:1px solid var(--border); border-radius:12px; padding:16px; background:#0c1626; }
+      .claim-heading { margin:0 0 10px; font-size:1rem; }
       .claim-text { margin:0 0 12px; font-weight:650; }
+      .claim-reference { margin:0 0 10px; color:var(--muted); font-size:.9rem; }
       details { border-top:1px solid #26364d; padding-top:10px; margin-top:10px; }
       summary { color:#bfece1; cursor:pointer; font-size:.9rem; }
       blockquote { margin:10px 0; padding:2px 0 2px 13px; border-left:3px solid var(--accent); color:#dce7f4; }
@@ -127,7 +129,9 @@
           result.hidden = false;
           status.textContent = data.status;
           status.className = `badge ${data.status}`;
-          answer.textContent = data.answer || "";
+          const answerText = typeof data.answer === "string" ? data.answer : "";
+          answer.textContent = answerText;
+          const normalizedAnswer = answerText.replace(/\s+/g, " ").trim().toLowerCase();
           claims.replaceChildren();
           insufficient.hidden = data.status !== "insufficient";
           conflicts.hidden = data.status !== "conflicting";
@@ -135,9 +139,17 @@
             ? "Retrieved sources contain incompatible, citation-verified claims. Review the quoted sources below."
             : "";
 
-          for (const claim of (Array.isArray(data.claims) ? data.claims : [])) {
+          for (const [index, claim] of (Array.isArray(data.claims) ? data.claims : []).entries()) {
             const card = element("article", "claim");
-            card.append(element("p", "claim-text", claim.text || ""));
+            const claimText = typeof claim.text === "string" ? claim.text : "";
+            const normalizedClaim = claimText.replace(/\s+/g, " ").trim().toLowerCase();
+            const claimId = typeof claim.claim_id === "string" ? claim.claim_id : String(index + 1);
+            card.append(element("h3", "claim-heading", `Evidence for claim ${claimId}`));
+            if (normalizedClaim && normalizedAnswer.includes(normalizedClaim)) {
+              card.append(element("p", "claim-reference", "Claim text is shown in the answer above."));
+            } else if (claimText) {
+              card.append(element("p", "claim-text", claimText));
+            }
             for (const citation of (Array.isArray(claim.citations) ? claim.citations : [])) {
               const details = element("details");
               const chunk = typeof citation.chunk_id === "string" ? citation.chunk_id : "verified source";
