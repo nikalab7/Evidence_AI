@@ -1,5 +1,7 @@
 from contextlib import contextmanager
 import json
+from html.parser import HTMLParser
+from pathlib import Path
 from time import perf_counter
 
 from fastapi.testclient import TestClient
@@ -106,6 +108,7 @@ def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     assert "50,000 indexed records" in page.text
     assert "This demo runs on free hosting. The first visit after inactivity may take approximately one minute to load." in page.text
     assert 'value="semantic" selected' in page.text
+    assert "select option:checked" in page.text and "background-color: var(--green)" in page.text
     assert 'id="loading"' in page.text
     assert 'id="insufficient"' in page.text and 'id="conflicts"' in page.text
     assert "textContent" in page.text and "innerHTML" not in page.text
@@ -116,14 +119,119 @@ def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     assert 'meta.lastChild.append(element("code", "", citation.chunk_id))' in page.text
     assert 'question: askedText' in page.text and 'question: question.value' not in page.text
     assert 'details.append(element("blockquote", "", typeof citation.quote === "string" ? citation.quote : ""))' in page.text
-    assert 'class="example-intent">Insufficient evidence example' in page.text
-    assert "example.dataset.question" in page.text and "resizeQuestion" in page.text
+    assert 'font: 400 1rem/1.55 var(--body)' in page.text
+    assert "EvidenceAI verifies citation presence and exact quotes" not in page.text
+    assert 'id="clear-question-button"' in page.text
+    assert '<span>Clear</span>' in page.text
+    assert 'clearQuestionButton.addEventListener("click"' in page.text
+    clear_handler = page.text.split('clearQuestionButton.addEventListener("click", () => {', 1)[1]
+    clear_handler = clear_handler.split('for (const example of examples.querySelectorAll', 1)[0]
+    for reset_action in (
+        "form.reset()", "askedQuestion.hidden = true", "result.hidden = true",
+        "answer.textContent = \"\"", "claims.replaceChildren()", "conflicts.hidden = true",
+        "insufficient.hidden = true", "error.hidden = true", 'document.body.classList.remove("has-result")',
+        'main.style.removeProperty("padding-bottom")', "question.focus({preventScroll: true})",
+    ):
+        assert reset_action in clear_handler
+    assert "fetch(" not in clear_handler and "form.requestSubmit()" not in clear_handler
+    assert 'id="examples-heading"' in page.text and "Tested questions" in page.text
+    assert 'data-group="single"' in page.text and 'data-group="multi"' in page.text
+    assert 'data-group="insufficient"' in page.text and 'data-group="conflicting"' in page.text
+    assert "The label describes the test, not a guaranteed answer." in page.text
+    assert "The label does not force an abstention." in page.text
+    assert "Their synthetic evidence is not indexed in production" in page.text
+    assert "a live investigation cannot reproduce the fixture test" in page.text
+    assert "data-expected-status" not in page.text and "Explore all 10 examples" not in page.text
+    assert "How an answer is built" not in page.text and "Final evaluation snapshot" not in page.text
+    assert "example.dataset.question" in page.text and "question.focus()" in page.text
+    assert "claimText) card.append(element(\"p\", \"claim-text\", claimText))" in page.text
+    assert 'group.hidden = group.dataset.group !== tab.dataset.group' in page.text
+    click_handler = page.text.split('for (const example of examples.querySelectorAll("button.example[data-question]")) {', 1)[1]
+    click_handler = click_handler.split('question.addEventListener("keydown"', 1)[0]
+    assert "form.requestSubmit()" not in click_handler and "fetch(" not in click_handler
     assert 'prefers-reduced-motion: reduce' in page.text
     assert "question.addEventListener(\"keydown\"" in page.text
     assert "animation: float .55s" in page.text
     assert "infinite alternate" not in page.text
     assert "result.focus({preventScroll: true})" in page.text
+    assert "body.has-result main { padding-bottom: 320px; }" in page.text
+    assert "function updateComposerClearance()" in page.text
+    assert "stage.getBoundingClientRect().height + 24" in page.text
+    assert "composerObserver.observe(stage)" in page.text
+    assert 'window.visualViewport.addEventListener("resize", updateComposerClearance' in page.text
+    submit_handler = page.text.split('form.addEventListener("submit", async (event) => {', 1)[1]
+    assert 'document.body.classList.add("has-result")' in submit_handler
+    assert "updateComposerClearance()" in submit_handler
     assert web_client.get("/health").json() == {"status": "ok"}
+
+
+def test_example_picker_uses_three_live_questions_per_scenario_and_labeled_conflict_fixtures(web_client):
+    expected_questions = {
+        "What is the birth date of American fiction writer Maile Meloy?": "single",
+        "How many passengers and crew were killed when Malaysia Airlines Flight 17 was shot down?": "single",
+        "From which city and region are Stiff Little Fingers?": "single",
+        "What is the name of the co-founder of DHL whose business partner had a son convicted of manslaughter?": "multi",
+        "Which Walt Disney film was produced first, \"So Dear to My Heart\" or \"The Jungle Book\"?": "multi",
+        "What year was the man who wrote the music score for A Long Day's Journey into Night born?": "multi",
+        "How many amber drones departed from the QX-EMBER-7719 station on 17 May?": "insufficient",
+        "Which company manufactured the VARN-KESTREL-8831 engine?": "insufficient",
+        "Who designed the TIDAL-MARBLE-1673 bridge?": "insufficient",
+    }
+    fixture_questions = [
+        "At 14:00 UTC, was payment processing available or unavailable?",
+        "How many jobs per minute did the Orion queue process?",
+        "What temperature did the North Vault maintain at noon?",
+    ]
+    evaluation_rows = [
+        json.loads(line)
+        for line in Path("eval/final_answer_eval.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    selected_live_rows = [row for row in evaluation_rows if row["question"] in expected_questions]
+    selected_fixture_rows = [row for row in evaluation_rows if row["question"] in fixture_questions]
+    assert len(selected_live_rows) == len(expected_questions) == 9
+    assert len(selected_fixture_rows) == len(fixture_questions) == 3
+    category_by_scenario = {"single": "single_hop", "multi": "multi_hop", "insufficient": "unanswerable"}
+    assert {row["question"]: row["category"] for row in selected_live_rows} == {
+        question: category_by_scenario[group] for question, group in expected_questions.items()
+    }
+    assert all(row["execution_mode"] == "live" for row in selected_live_rows)
+    assert all(row["category"] == "conflicting" and row["execution_mode"] == "fixture"
+               for row in selected_fixture_rows)
+
+    class ExampleParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.items = []
+            self.group = None
+
+        def handle_starttag(self, tag, attrs):
+            attributes = dict(attrs)
+            classes = attributes.get("class", "").split()
+            if tag == "div" and "example-group" in classes:
+                self.group = attributes.get("data-group")
+            if tag == "button" and "example" in classes:
+                self.items.append({
+                    "question": attributes.get("data-question"),
+                    "group": self.group,
+                    "fixture": "example--fixture" in classes,
+                })
+
+    page = web_client.get("/")
+    parser = ExampleParser()
+    parser.feed(page.text)
+    assert {item["question"]: item["group"] for item in parser.items} == expected_questions | {
+        question: "conflicting" for question in fixture_questions
+    }
+    assert len(parser.items) == 12
+    assert len([item for item in parser.items if item["group"] == "single"]) == 3
+    assert len([item for item in parser.items if item["group"] == "multi"]) == 3
+    assert len([item for item in parser.items if item["group"] == "insufficient"]) == 3
+    assert len([item for item in parser.items if item["group"] == "conflicting" and item["fixture"]]) == 3
+    assert all(item["fixture"] for item in parser.items if item["group"] == "conflicting")
+    assert "Their synthetic evidence is not indexed in production" in page.text
+    assert "a live investigation cannot reproduce the fixture test" in page.text
+    assert 'class="example example--fixture" type="button" data-question=' in page.text
 
 
 def test_http_investigation_runs_agent_and_returns_verified_citation(web_client, monkeypatch, caplog):

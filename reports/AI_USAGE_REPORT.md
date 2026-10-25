@@ -435,7 +435,9 @@ Local planning and personal preparation notes are excluded from the repository.
   investigation request now sends the captured question before clearing the
   textarea; claim text, verified quotations, source titles/links, and full
   claim/passage IDs remain visible. Citation panels are compact by default,
-  with only the first citation expanded.
+  with only the first citation expanded. Native select option colors and the
+  accent color are set from the existing green/gray palette to avoid the
+  browser's default blue selection where the platform honors option styling.
 - The question textarea grows up to its configured bound, Enter submits and
   Shift+Enter inserts a line break, reduced-motion preferences are honored, and
   the library login returns to a compact unlocked state while keeping the token
@@ -443,3 +445,31 @@ Local planning and personal preparation notes are excluded from the repository.
 - Verification: 267 local pytest tests passed; both inline scripts passed
   Node.js syntax checks. No Gemini requests, database writes, or deployment
   occurred. In-app visual browser verification was unavailable in this runtime.
+
+### Evaluation question tabs - 2026-10-26
+
+- Reworked the picker to match the supplied four-tab design and removed the
+  lower instructional and metrics sections. The three runnable groups contain
+  three exact evaluation questions each: single-hop, multi-hop, and
+  unanswerable; all nine source rows use `execution_mode=live`. The 2 Chainz
+  item was replaced with a multi-hop question whose completed evaluation row
+  recorded a correct answer and retrieval of both support references. No new
+  live request was made, and no gold answers or forced result statuses are shown.
+- The Conflicting tab's three fixture prompts now fill the question field when
+  selected, but never auto-submit. The note states their synthetic evidence is
+  not indexed in production, so a live investigation cannot reproduce the
+  fixture test. All twelve examples fill and focus the existing textarea.
+- Added a compact `Clear` control that resets the question, retrieval mode,
+  displayed answer, citations, status, and errors to the initial page state
+  without reloading. It is disabled while an investigation is running. Citation
+  quotes use normal body text, and the explanatory citation-verification footer
+  was removed.
+- Fixed result-page bottom scrolling: the page now reserves space based on the
+  actual fixed composer height, updating when the viewport or mobile visual
+  viewport changes and when the composer resizes. This prevents the final
+  evidence/citation content from ending underneath the question panel.
+- The evidence panel continues to show each actual claim statement alongside
+  its human-readable evidence heading and technical claim ID. Automated checks
+  cover exact question strings, category counts, execution modes, and the
+  question-clear behavior and fixture labeling. The full local suite passed
+  268 tests. No Gemini calls, production writes, or deployment occurred.

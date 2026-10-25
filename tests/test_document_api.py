@@ -176,3 +176,4 @@ def test_library_page_keeps_token_in_memory_and_avoids_html_injection(library_cl
     assert 'authPanel.classList.add("is-unlocked")' in page.text
     assert "Use Lock library to sign out." in page.text
     assert 'prefers-reduced-motion: reduce' in page.text
+    assert "select option:checked" in page.text
