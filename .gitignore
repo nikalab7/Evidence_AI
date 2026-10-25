@@ -24,6 +24,7 @@ data/cache/
 /reports/final_evaluation_smoke.jsonl
 /reports/final_evaluation_smoke_*.jsonl
 /reports/.phase7_4_final_conflict_results.jsonl
+/reports/.phase7_4_final_conflict_results_network_retry.jsonl
 /reports/.final_evaluation_budget.jsonl
 /reports/.final_evaluation_budget.jsonl.lock
 /reports/.final_evaluation_budget_*.jsonl

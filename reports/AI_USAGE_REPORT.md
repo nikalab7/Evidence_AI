@@ -404,20 +404,26 @@ Local planning and personal preparation notes are excluded from the repository.
 
 ### Phase 7.4 post-hoc final conflict-fixture check - 2026-10-25
 
-- With explicit operator approval, Codex ran only the seven existing final
-  conflict fixtures once through the retained build. It used the current
-  Frankfurt project identity guard and the shared rolling reservation ledger;
-  the process-local investigation ceiling was raised only enough to reserve
-  these seven cases because the existing 106 recent reservations exceeded the
-  unchanged local `.env` limit of 60. No `.env`, Render, database, or dataset
-  change was made.
-- The runner counted 14 Gemini HTTP attempts (two per fixture), but
-  all seven investigations ended with a sanitized `upstream_network_error`
-  before any model response, tool call, or citation. Provider receipt and
-  billable quota use are unknown. The call was not retried. This is an
-  inconclusive post-hoc regression attempt, not a model result and not a change
-  to the frozen 45-case evaluation. The isolated local checkpoint is ignored by
-  Git at `reports/.phase7_4_final_conflict_results.jsonl`.
-- The full local suite passed 267 tests. The frozen-report regression test was
-  adjusted to verify the original report hash after removing only the approved
-  post-hoc comparison block.
+- The first explicitly approved attempt ran only the seven final conflict
+  fixtures. All seven hit `upstream_network_error` after 14 Gemini HTTP
+  attempts; no model output, tool call, or citation was produced. That attempt
+  was not retried until the later probe passed and a separate rerun was
+  approved. Its local checkpoint is preserved at
+  `reports/.phase7_4_final_conflict_results.jsonl`.
+- The one-time Gemini service probe passed for `gemini-3.5-flash-lite`: one
+  generation call returned text, 8 tokens were reported, and elapsed time was
+  1.173 seconds. The probe is separate from the investigation request counts.
+- After the probe, Codex ran the seven final conflict fixtures once more using
+  the retained build, the Frankfurt identity guard, and the shared reservation
+  ledger. The rerun completed 7/7 expected conflict statuses, made 21 Gemini
+  HTTP attempts and 7 tool calls, and passed exact-quote checks for 14/14 draft
+  citations. Median/p95 investigation time was 3.122/3.305 seconds. The
+  development-selected fix was not changed based on these final fixtures. The
+  separate result checkpoint is preserved at
+  `reports/.phase7_4_final_conflict_results_network_retry.jsonl`.
+- The process-local daily ceiling was set to exactly 120 for the rerun because
+  the shared ledger already had 113 recent reservations; `.env` remains at 60
+  and Render is unchanged. No database or dataset writes occurred. The full
+  local suite passed 267 tests. The frozen-report regression test verifies the
+  original report hash after removing only the approved post-hoc comparison
+  block.

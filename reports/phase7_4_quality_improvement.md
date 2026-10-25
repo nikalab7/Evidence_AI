@@ -1,7 +1,9 @@
 # Phase 7.4 - Targeted quality improvement
 
 Status: development comparison and verification complete. The original 45-case
-final evaluation and its report remain frozen at the Phase 7.3 baseline.
+metrics and result checkpoint remain frozen at the Phase 7.3 baseline. A later,
+separately approved seven-conflict post-hoc check is recorded in
+[final_evaluation.md](final_evaluation.md); it did not affect fix selection.
 The retained change is the deterministic conflict fix and private diagnostics;
 the tested prompt expansion was rejected after its mixed live results.
 
@@ -236,10 +238,14 @@ remain in ignored local checkpoint files.
   diagnostics support future investigations without inventing historical causes.
 - No automatic repair, extra model call, new infrastructure, corpus write, schema
   change or deployment was introduced. The retained build has unit and saved-draft
-  verification; a fresh live run of that final build would require new approval.
-- Complete local suite: **267 passed**. Original final artifact hashes remain
-  unchanged, including its report and 45-row checkpoint. The original final set
-  was not rerun or rescored.
+  verification. A later approved run of only the seven final conflict fixtures,
+  after the Gemini network probe passed, returned the expected conflict status
+  in 7/7 cases with 21 requests and 14/14 exact-quote checks; it was not used to
+  select or tune the fix. The first attempt's network failures are footnoted in
+  `final_evaluation.md`.
+- Complete local suite: **267 passed**. The original 45-row result checkpoint,
+  dataset and baseline metrics remain unchanged. The report's baseline content
+  is hash-checked after removing only the separately approved post-hoc block.
 
 ## Reproduction
 

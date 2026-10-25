@@ -189,7 +189,7 @@ def test_original_final_dataset_and_report_still_match_frozen_diagnosis():
                 end = report.index("\n## Metric definitions", start)
                 approved_addition = report[start:end]
                 assert hashlib.sha256(approved_addition.encode("utf-8")).hexdigest() == (
-                    "6fb9a14c0b7a88c945171b78576871684b129c3e5e34cf7d982cbe5ec8cfd319"
+                    "d2f52315526a12991e220e25eff188dcc3f50bb0557c3bca0d33db4a6f3e51df"
                 )
                 original_fixture_summary = (
                     "Conflict fixtures: 1 / 7 correctly detected (0.1429); predicted statuses: "
