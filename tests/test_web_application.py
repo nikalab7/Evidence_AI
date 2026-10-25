@@ -97,14 +97,32 @@ def _hit():
 def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     page = web_client.get("/")
     assert page.status_code == 200
+    for dom_id in (
+        "investigation-form", "question-label", "question", "retrieval-mode",
+        "submit-button", "loading", "error", "result", "result-status",
+        "insufficient", "conflicts", "answer", "claims",
+    ):
+        assert f'id="{dom_id}"' in page.text
     assert "50,000 indexed records" in page.text
     assert "This demo runs on free hosting. The first visit after inactivity may take approximately one minute to load." in page.text
     assert 'value="semantic" selected' in page.text
     assert 'id="loading"' in page.text
     assert 'id="insufficient"' in page.text and 'id="conflicts"' in page.text
     assert "textContent" in page.text and "innerHTML" not in page.text
-    assert "normalizedAnswer.includes(normalizedClaim)" in page.text
     assert "Verified citation" in page.text
+    assert 'aria-labelledby="result-heading" tabindex="-1"' in page.text
+    assert "firstCitationPending" in page.text and "details.open = firstCitationPending" in page.text
+    assert "Evidence supporting statement" in page.text and "Passage ID:" in page.text
+    assert 'meta.lastChild.append(element("code", "", citation.chunk_id))' in page.text
+    assert 'question: askedText' in page.text and 'question: question.value' not in page.text
+    assert 'details.append(element("blockquote", "", typeof citation.quote === "string" ? citation.quote : ""))' in page.text
+    assert 'class="example-intent">Insufficient evidence example' in page.text
+    assert "example.dataset.question" in page.text and "resizeQuestion" in page.text
+    assert 'prefers-reduced-motion: reduce' in page.text
+    assert "question.addEventListener(\"keydown\"" in page.text
+    assert "animation: float .55s" in page.text
+    assert "infinite alternate" not in page.text
+    assert "result.focus({preventScroll: true})" in page.text
     assert web_client.get("/health").json() == {"status": "ok"}
 
 

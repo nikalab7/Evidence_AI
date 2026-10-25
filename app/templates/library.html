@@ -3,58 +3,140 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b1220">
+    <meta name="theme-color" content="#e9eeeb">
     <title>Document Library | EvidenceAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..700&family=Funnel+Sans:wght@400..700&display=swap" rel="stylesheet">
     <style>
-      :root { color-scheme:dark; --bg:#0b1220; --panel:#111c2e; --border:#26364d; --text:#edf4ff; --muted:#aabbd1; --accent:#73d2bd; --danger:#ff9a9a; }
-      * { box-sizing:border-box; }
-      body { margin:0; background:radial-gradient(ellipse at 15% 0%,#18334a 0,transparent 42%),var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-      main { width:min(1040px,calc(100% - 30px)); margin:0 auto; padding:34px 0 60px; }
-      header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
-      header a { color:#9fe7d7; }
-      h1 { margin:0; font-size:clamp(1.9rem,5vw,2.6rem); letter-spacing:-.04em; }
-      h2 { margin:0 0 15px; font-size:1.2rem; }
-      .lead,.muted,footer { color:var(--muted); }
-      .lead { margin:8px 0 24px; }
-      .panel { border:1px solid var(--border); border-radius:16px; background:rgba(17,28,46,.94); padding:clamp(16px,3vw,24px); margin-top:16px; }
-      label { display:block; margin:10px 0 6px; font-weight:650; }
-      input,select,textarea { width:100%; padding:10px 12px; border:1px solid #3a4b63; border-radius:9px; background:#0c1626; color:var(--text); font:inherit; }
-      input[type=file] { padding:8px; }
-      textarea { min-height:86px; resize:vertical; }
-      input:focus,select:focus,textarea:focus,button:focus-visible,a:focus-visible { outline:3px solid #73d2bd88; outline-offset:2px; }
-      button { min-height:42px; border:0; border-radius:9px; padding:9px 15px; background:var(--accent); color:#08201c; font:inherit; font-weight:750; cursor:pointer; }
-      button.secondary { border:1px solid #52637b; background:#18273b; color:var(--text); }
-      button.danger { border:1px solid #844d58; background:#321d27; color:#ffdce0; }
-      button:disabled { opacity:.55; cursor:wait; }
-      .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; }
-      .form-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,.42fr); gap:12px; }
-      .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
-      .status { min-height:24px; margin:12px 0 0; }
-      .status.error { color:#ffdce0; }
-      .status.success { color:#99e4cf; }
-      [hidden] { display:none !important; }
-      .document-list { display:grid; gap:10px; padding:0; list-style:none; }
-      .document { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; border:1px solid var(--border); border-radius:11px; padding:13px; background:#0c1626; }
-      .document-title { overflow-wrap:anywhere; font-weight:700; }
-      .document-meta { color:var(--muted); font-size:.85rem; }
-      .document-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-      .document-actions button { min-height:36px; padding:6px 10px; font-size:.9rem; }
-      .details { overflow-wrap:anywhere; }
-      pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); border-radius:10px; padding:13px; background:#0a1321; }
-      code { font-size:.85em; }
-      footer { margin-top:24px; font-size:.84rem; }
-      @media(max-width:650px) { .row,.form-grid,.document { grid-template-columns:1fr; } .document-actions { justify-content:flex-start; } .row button { width:100%; } }
+      :root {
+        color-scheme: light;
+        --base: #e9eeeb;
+        --hi: #ffffff;
+        --lo: #c3ccc6;
+        --ink: #000;
+        --text: #1d2420;
+        --muted: #5f6a64;
+        --green: #00a85a;
+        --green-hi: #19c072;
+        --green-deep: #00703c;
+        --red: #a3261b;
+        --raised: 9px 9px 18px var(--lo), -9px -9px 18px var(--hi);
+        --raised-sm: 5px 5px 10px var(--lo), -5px -5px 10px var(--hi);
+        --inset: inset 6px 6px 12px var(--lo), inset -6px -6px 12px var(--hi);
+        --inset-sm: inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi);
+        --display: "Funnel Display", "Funnel Sans", system-ui, sans-serif;
+        --body: "Funnel Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --ease: cubic-bezier(.22, .8, .2, 1);
+        --green-text: #00703c;
+        --btn-shadow: #a9b8af;
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: var(--base); color: var(--text); font: 400 16px/1.55 var(--body); }
+      main { width: min(900px, calc(100% - 32px)); margin: 0 auto; padding: 26px 0 64px; }
+
+      .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 44px; }
+      .mark { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--base); box-shadow: var(--raised-sm); color: var(--ink); font: 600 1rem/1 var(--display); }
+      .mark::after { content: ""; position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+      .brand-name { font: 600 1.05rem/1.2 var(--display); color: var(--ink); }
+      .topbar nav { margin-left: auto; }
+      .topbar nav a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 18px; border-radius: 12px; background: var(--base); box-shadow: var(--raised-sm); color: var(--ink); font-size: .9rem; font-weight: 500; text-decoration: none; transition: box-shadow .25s var(--ease); }
+      .topbar nav a:hover { box-shadow: var(--inset-sm); }
+
+      h1 { margin: 0; color: var(--ink); font: 400 clamp(1.6rem, 3.4vw, 2rem)/1.15 var(--display); letter-spacing: -.02em; }
+      h2 { margin: 0 0 6px; color: var(--ink); font: 500 1.15rem/1.3 var(--display); }
+      .lead, .muted, footer { color: var(--muted); }
+      .lead { margin: 8px 0 30px; }
+      .muted { margin: 0 0 14px; font-size: .92rem; }
+
+      .panel { margin-top: 26px; padding: clamp(20px, 3.4vw, 30px); border-radius: 22px; background: var(--base); box-shadow: var(--raised); }
+      .auth-panel.is-unlocked { padding-top: 15px; padding-bottom: 15px; }
+      .auth-panel.is-unlocked h2 { margin-bottom: 0; }
+      .auth-panel.is-unlocked .status { margin-top: 5px; }
+      label { display: block; margin: 14px 0 8px; color: var(--text); font-size: .9rem; font-weight: 500; }
+      input, select, textarea {
+        width: 100%;
+        min-height: 46px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--base);
+        box-shadow: var(--inset-sm);
+        color: var(--ink);
+        font: 400 1rem/1.4 var(--body);
+        outline: none;
+      }
+      input:focus, select:focus { box-shadow: var(--inset-sm), 0 0 0 2px rgba(0, 168, 90, .35); }
+      input[type=file] { padding: 10px 12px; cursor: pointer; }
+      input[type=file]::file-selector-button { margin-right: 14px; padding: 8px 14px; border: 0; border-radius: 12px; background: var(--base); box-shadow: var(--raised-sm); color: var(--ink); font: 500 .88rem/1 var(--body); cursor: pointer; }
+      select { appearance: none; -webkit-appearance: none; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 22px) 50%, calc(100% - 17px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+
+      button {
+        min-height: 46px;
+        padding: 0 22px;
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(145deg, var(--green-hi), var(--green));
+        box-shadow: 6px 6px 14px var(--btn-shadow), -6px -6px 14px var(--hi), inset 1px 1px 0 rgba(255, 255, 255, .35);
+        color: #fff;
+        font: 600 .95rem/1 var(--body);
+        cursor: pointer;
+        transition: box-shadow .2s var(--ease), transform .2s var(--ease);
+      }
+      button:hover { transform: translateY(-1px); }
+      button:active { transform: none; box-shadow: inset 4px 4px 8px #00803f, inset -4px -4px 8px #1fd27e; }
+      button.secondary { background: var(--base); box-shadow: var(--raised-sm); color: var(--ink); }
+      button.secondary:active { box-shadow: var(--inset-sm); }
+      button.danger { background: var(--base); box-shadow: var(--raised-sm); color: var(--red); }
+      button.danger:active { box-shadow: var(--inset-sm); }
+      button:disabled, button:disabled:hover { transform: none; opacity: .5; cursor: not-allowed; }
+      input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+
+      .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; }
+      .row > *, .form-grid > *, .document > * { min-width: 0; }
+      .form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, .45fr); gap: 16px; }
+      .actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
+      .status { min-height: 24px; margin: 14px 0 0; font-size: .92rem; }
+      .status.error { color: var(--red); }
+      .status.success { color: var(--green-text); }
+
+      .document-list { display: grid; gap: 14px; margin: 18px 0 0; padding: 0; list-style: none; }
+      .document { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 18px; border-radius: 16px; box-shadow: var(--inset-sm); }
+      .document-title { overflow-wrap: anywhere; color: var(--ink); font-weight: 600; }
+      .document-meta { color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
+      .document-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+      .document-actions button { min-height: 38px; padding: 0 16px; font-size: .88rem; }
+      .details { overflow-wrap: anywhere; }
+      #inspection-meta { white-space: pre-wrap; font-size: .86rem; }
+      pre { max-height: 360px; overflow: auto; margin: 16px 0 0; padding: 16px 18px; border-radius: 16px; box-shadow: var(--inset); white-space: pre-wrap; overflow-wrap: anywhere; font: 400 .9rem/1.55 var(--body); }
+      footer { margin-top: 34px; font-size: .82rem; text-align: center; }
+
+      @media (max-width: 650px) {
+        .topbar { flex-wrap: wrap; margin-bottom: 30px; }
+        .row, .form-grid, .document { grid-template-columns: 1fr; }
+        .document-actions { justify-content: flex-start; }
+        .row button, .actions button { width: 100%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+        button:hover { transform: none; }
+      }
     </style>
   </head>
   <body>
     <main>
-      <header><a href="/">← EvidenceAI investigations</a><span class="muted">Owner-managed library</span></header>
+      <header class="topbar">
+        <div class="mark" aria-hidden="true">E</div>
+        <div class="brand-name">EvidenceAI</div>
+        <nav aria-label="Main navigation"><a href="/">Investigate</a></nav>
+      </header>
       <h1>Document library</h1>
       <p class="lead">Manage uploaded source documents. The original indexed corpus is protected and is not shown here.</p>
 
-      <section class="panel" aria-labelledby="auth-title">
+        <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
         <h2 id="auth-title">Administrator access</h2>
-        <p class="muted">Enter the server-configured admin token. It stays in this page's memory and is cleared when you log out or close the page.</p>
+          <p id="auth-hint" class="muted">Enter the server-configured admin token. It stays in this page's memory and is cleared when you log out or close the page.</p>
         <form id="auth-form" class="row">
           <div><label for="admin-token">Admin token</label><input id="admin-token" type="password" autocomplete="off" required></div>
           <button id="auth-button" type="submit">Unlock library</button>
@@ -102,7 +184,9 @@
       (() => {
         let adminToken = "";
         let selectedUploadId = "";
+        const authPanel = document.getElementById("auth-panel");
         const authForm = document.getElementById("auth-form");
+        const authHint = document.getElementById("auth-hint");
         const tokenInput = document.getElementById("admin-token");
         const authStatus = document.getElementById("auth-status");
         const library = document.getElementById("library");
@@ -152,6 +236,9 @@
           adminToken = "";
           selectedUploadId = "";
           library.hidden = true;
+          authForm.hidden = false;
+          authHint.hidden = false;
+          authPanel.classList.remove("is-unlocked");
           tokenInput.value = "";
           replaceButton.disabled = true;
           clearSelection.hidden = true;
@@ -188,7 +275,8 @@
           inspectionMeta.textContent = fields.join("\n");
           inspectionText.textContent = doc.text || "";
           inspection.hidden = false;
-          inspection.scrollIntoView({behavior:"smooth", block:"start"});
+          const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+          inspection.scrollIntoView({behavior, block:"start"});
         }
 
         function renderList(documents) {
@@ -255,7 +343,10 @@
           try {
             await refreshList();
             library.hidden = false;
-            message(authStatus, "Administrator access verified.", "success");
+            authForm.hidden = true;
+            authHint.hidden = true;
+            authPanel.classList.add("is-unlocked");
+            message(authStatus, "Administrator access unlocked. Use Lock library to sign out.", "success");
           } catch (error) {
             if (adminToken) adminToken = "";
             message(authStatus, error.message, "error");

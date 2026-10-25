@@ -157,9 +157,22 @@ def test_upload_limits_scanned_pdf_errors_and_backend_errors_are_sanitized(libra
 def test_library_page_keeps_token_in_memory_and_avoids_html_injection(library_client):
     page = library_client.get("/library")
     assert page.status_code == 200
+    for dom_id in (
+        "auth-form", "admin-token", "auth-status", "library", "document-form",
+        "document-file", "document-title", "chunking-strategy", "upload-button",
+        "replace-button", "clear-selection", "logout-button", "document-list",
+        "inspection", "inspection-meta", "inspection-text",
+    ):
+        assert f'id="{dom_id}"' in page.text
     assert "Document library" in page.text
     assert "localStorage" not in page.text and "sessionStorage" not in page.text
     assert "textContent" in page.text and "innerHTML" not in page.text
     assert 'type="password"' in page.text
     assert 'tokenInput.value = ""' in page.text
     assert 'name="Authorization"' not in page.text
+    assert 'id="auth-form"' in page.text
+    assert 'id="auth-hint"' in page.text
+    assert "authForm.hidden = true" in page.text and "authForm.hidden = false" in page.text
+    assert 'authPanel.classList.add("is-unlocked")' in page.text
+    assert "Use Lock library to sign out." in page.text
+    assert 'prefers-reduced-motion: reduce' in page.text

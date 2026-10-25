@@ -427,3 +427,19 @@ Local planning and personal preparation notes are excluded from the repository.
   local suite passed 267 tests. The frozen-report regression test verifies the
   original report hash after removing only the approved post-hoc comparison
   block.
+
+### UI template update - 2026-10-26
+
+- The supplied newer investigation and library HTML were integrated into the
+  served templates while preserving existing routes and DOM contracts. The
+  investigation request now sends the captured question before clearing the
+  textarea; claim text, verified quotations, source titles/links, and full
+  claim/passage IDs remain visible. Citation panels are compact by default,
+  with only the first citation expanded.
+- The question textarea grows up to its configured bound, Enter submits and
+  Shift+Enter inserts a line break, reduced-motion preferences are honored, and
+  the library login returns to a compact unlocked state while keeping the token
+  in page memory only.
+- Verification: 267 local pytest tests passed; both inline scripts passed
+  Node.js syntax checks. No Gemini requests, database writes, or deployment
+  occurred. In-app visual browser verification was unavailable in this runtime.

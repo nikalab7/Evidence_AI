@@ -3,109 +3,422 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b1220">
+    <meta name="theme-color" content="#e9eeeb">
     <title>EvidenceAI | Investigate</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..700&family=Funnel+Sans:wght@400..700&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
     <style>
-      :root { color-scheme: dark; --bg:#0b1220; --panel:#111c2e; --border:#26364d; --text:#edf4ff; --muted:#aabbd1; --accent:#73d2bd; --warning:#f6ce78; --danger:#ff9a9a; }
-      * { box-sizing:border-box; }
-      body { margin:0; background:radial-gradient(ellipse at 15% 0%,#18334a 0,transparent 42%),var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-      main { width:min(920px,calc(100% - 32px)); margin:0 auto; padding:42px 0 64px; }
-      .brand { display:flex; align-items:center; gap:12px; margin-bottom:28px; }
-      .mark { display:grid; place-items:center; width:42px; height:42px; border-radius:13px; background:var(--accent); color:#071721; font-weight:800; letter-spacing:-.06em; }
-      .brand-name { font-size:1.12rem; font-weight:750; letter-spacing:.01em; }
-      .brand-nav { margin-left:auto; display:flex; gap:14px; flex-wrap:wrap; }
-      .brand-nav a { color:#9fe7d7; font-size:.9rem; }
-      .corpus-count { color:var(--muted); font-size:.88rem; }
-      h1 { margin:0; font-size:clamp(2rem,5vw,3rem); line-height:1.08; letter-spacing:-.04em; }
-      .lead { max-width:690px; color:var(--muted); margin:14px 0 24px; }
-      .cold-note { padding:12px 15px; margin:0 0 22px; border:1px solid #42677c; border-radius:12px; background:#122a3a; color:#d8f2ff; font-size:.92rem; }
-      .panel { border:1px solid var(--border); border-radius:18px; background:rgba(17,28,46,.92); padding:clamp(18px,4vw,28px); box-shadow:0 18px 54px #0003; }
-      label { display:block; margin-bottom:8px; font-weight:650; }
-      textarea,select { width:100%; border:1px solid #3a4b63; border-radius:10px; background:#0c1626; color:var(--text); font:inherit; }
-      textarea { min-height:132px; resize:vertical; padding:13px 14px; }
-      select { padding:10px 12px; }
-      textarea:focus,select:focus,button:focus-visible,a:focus-visible { outline:3px solid #73d2bd88; outline-offset:2px; }
-      .controls { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; margin-top:16px; }
-      .mode { max-width:260px; }
-      .hint { color:var(--muted); font-size:.82rem; margin-top:6px; }
-      button { min-height:44px; border:0; border-radius:10px; padding:10px 20px; background:var(--accent); color:#08201c; font:inherit; font-weight:750; cursor:pointer; }
-      button:disabled { opacity:.62; cursor:wait; }
-      .status-line { display:flex; align-items:center; gap:10px; min-height:30px; margin:16px 0 0; color:var(--muted); }
-      [hidden] { display:none !important; }
-      .spinner { width:17px; height:17px; border:2px solid #9cb3c777; border-top-color:var(--accent); border-radius:50%; animation:spin .75s linear infinite; }
-      @keyframes spin { to { transform:rotate(360deg); } }
-      .result { margin-top:24px; }
-      .result-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
-      .result h2 { margin:0; font-size:1.25rem; }
-      .badge { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
-      .badge.answered { border-color:#326b5e; color:#99e4cf; }
-      .badge.insufficient { border-color:#816a39; color:var(--warning); }
-      .badge.conflicting { border-color:#844d58; color:#ffb0b8; }
-      .answer { margin:0; font-size:1.06rem; white-space:pre-wrap; }
-      .claims { display:grid; gap:14px; margin-top:18px; }
-      .claim { border:1px solid var(--border); border-radius:12px; padding:16px; background:#0c1626; }
-      .claim-heading { margin:0 0 10px; font-size:1rem; }
-      .claim-text { margin:0 0 12px; font-weight:650; }
-      .claim-reference { margin:0 0 10px; color:var(--muted); font-size:.9rem; }
-      details { border-top:1px solid #26364d; padding-top:10px; margin-top:10px; }
-      summary { color:#bfece1; cursor:pointer; font-size:.9rem; }
-      blockquote { margin:10px 0; padding:2px 0 2px 13px; border-left:3px solid var(--accent); color:#dce7f4; }
-      .citation-meta { display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:.82rem; }
-      .citation-meta a { color:#9fe7d7; }
-      code { font-size:.8em; color:#bdcbe0; overflow-wrap:anywhere; }
-      .conflicts { border-left:3px solid var(--danger); padding:10px 14px; background:#321d27; color:#ffdce0; border-radius:0 9px 9px 0; margin:14px 0; }
-      .insufficient-note { border-left:3px solid var(--warning); padding:10px 14px; background:#30291d; color:#ffebbd; border-radius:0 9px 9px 0; margin:14px 0; }
-      .error { margin-top:16px; padding:12px 14px; border:1px solid #844d58; border-radius:10px; color:#ffdce0; background:#321d27; }
-      footer { margin-top:22px; color:#8fa1b9; font-size:.82rem; }
-      @media (max-width:600px) { main { width:min(920px,calc(100% - 22px)); padding-top:26px; } .controls { grid-template-columns:1fr; } .mode { max-width:none; } button { width:100%; } .result-header { align-items:flex-start; flex-direction:column; } }
-      @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
+      :root {
+        color-scheme: light;
+        --base: #e9eeeb;
+        --hi: #ffffff;
+        --lo: #c3ccc6;
+        --ink: #000;
+        --text: #1d2420;
+        --muted: #5f6a64;
+        --green: #00a85a;
+        --green-hi: #19c072;
+        --green-deep: #00703c;
+        --amber: #8a5a00;
+        --red: #a3261b;
+        --raised: 9px 9px 18px var(--lo), -9px -9px 18px var(--hi);
+        --raised-sm: 5px 5px 10px var(--lo), -5px -5px 10px var(--hi);
+        --inset: inset 6px 6px 12px var(--lo), inset -6px -6px 12px var(--hi);
+        --inset-sm: inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi);
+        --display: "Funnel Display", "Funnel Sans", system-ui, sans-serif;
+        --body: "Funnel Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --quote: "Newsreader", Georgia, serif;
+        --ease: cubic-bezier(.22, .8, .2, 1);
+        --green-text: #00703c;
+        --btn-shadow: #a9b8af;
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--base);
+        color: var(--text);
+        font: 400 16px/1.55 var(--body);
+      }
+      .field { display: none; }
+      main { width: min(740px, calc(100% - 32px)); margin: 0 auto; padding: 26px 0 72px; }
+
+      .topbar { display: flex; align-items: center; gap: 12px; }
+      .mark {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 13px;
+        background: var(--base);
+        box-shadow: var(--raised-sm);
+        color: var(--ink);
+        font: 600 1rem/1 var(--display);
+      }
+      .mark::after {
+        content: "";
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+      .brand-name { font: 600 1.05rem/1.2 var(--display); color: var(--ink); }
+      .topbar nav { margin-left: auto; }
+      .topbar nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 18px;
+        border-radius: 12px;
+        background: var(--base);
+        box-shadow: var(--raised-sm);
+        color: var(--ink);
+        font-size: .9rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: box-shadow .25s var(--ease);
+      }
+      .topbar nav a:hover { box-shadow: var(--inset-sm); }
+
+      .hero { padding: clamp(64px, 16vh, 140px) 0 0; text-align: center; transition: padding .6s var(--ease); }
+      body.has-result .hero { padding-top: 12px; }
+      body.has-result .examples, body.has-result .corpus, body.has-result h1, body.has-result .cold-note { display: none; }
+      body.has-result main { padding-bottom: 210px; }
+      body.has-result .stage {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 10;
+        margin: 0;
+        padding: 36px 16px 18px;
+        background: linear-gradient(to bottom, rgba(233, 238, 235, 0), var(--base) 42%);
+      }
+      body.has-result .capsule { max-width: 740px; margin: 0 auto; animation: none; }
+      .corpus {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 16px;
+        padding: 7px 14px;
+        border-radius: 12px;
+        box-shadow: var(--inset-sm);
+        color: var(--text);
+        font-size: .88rem;
+      }
+      .corpus::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green-hi); }
+      h1 { margin: 0; color: var(--ink); font: 400 clamp(1.6rem, 3.4vw, 2rem)/1.15 var(--display); letter-spacing: -.02em; }
+
+      .stage { margin: 34px auto 0; }
+      .capsule {
+        padding: 14px;
+        border-radius: 22px;
+        background: var(--base);
+        box-shadow: var(--raised);
+        text-align: left;
+        animation: float .55s var(--ease) 1 both;
+      }
+      @keyframes float {
+        from { box-shadow: 9px 9px 18px var(--lo), -9px -9px 18px var(--hi); transform: translateY(0); }
+        to { box-shadow: 14px 16px 26px var(--lo), -10px -10px 22px var(--hi); transform: translateY(-4px); }
+      }
+      .ground { display: none; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      textarea {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        min-height: 104px;
+        max-height: 280px;
+        padding: 16px 18px;
+        border: 0;
+        border-radius: 16px;
+        background: var(--base);
+        box-shadow: var(--inset);
+        color: var(--ink);
+        font: 400 1.12rem/1.5 var(--body);
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        resize: vertical;
+        outline: none;
+        transition: box-shadow .3s var(--ease);
+      }
+      textarea:focus { box-shadow: var(--inset), 0 0 0 2px rgba(0, 168, 90, .35); }
+      textarea::placeholder { color: #8b958f; }
+      .capsule-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 4px 2px; }
+      .select-wrap { position: relative; }
+      .select-wrap::after {
+        content: "";
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        width: 6px;
+        height: 6px;
+        border-right: 1.5px solid var(--muted);
+        border-bottom: 1.5px solid var(--muted);
+        transform: translateY(-70%) rotate(45deg);
+        pointer-events: none;
+      }
+      select {
+        appearance: none;
+        -webkit-appearance: none;
+        min-height: 42px;
+        padding: 0 38px 0 16px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--base);
+        box-shadow: var(--raised-sm);
+        color: var(--text);
+        font: 500 .88rem/1 var(--body);
+        cursor: pointer;
+      }
+      button[type="submit"] {
+        margin-left: auto;
+        min-height: 50px;
+        padding: 0 26px;
+        border: 0;
+        border-radius: 12px;
+        background: linear-gradient(145deg, var(--green-hi), var(--green));
+        box-shadow: 6px 6px 14px var(--btn-shadow), -6px -6px 14px var(--hi), inset 1px 1px 0 rgba(255, 255, 255, .35);
+        color: #fff;
+        font: 600 .98rem/1 var(--body);
+        cursor: pointer;
+        transition: box-shadow .2s var(--ease), transform .2s var(--ease);
+      }
+      button[type="submit"]:hover { transform: translateY(-1px); }
+      button[type="submit"]:active { transform: none; box-shadow: inset 4px 4px 8px #00803f, inset -4px -4px 8px #1fd27e; }
+      button[type="submit"]:disabled { cursor: progress; box-shadow: inset 4px 4px 8px #00803f, inset -4px -4px 8px #1fd27e; }
+      select:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible, .example:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+
+      .examples { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin: 44px auto 0; max-width: 42rem; }
+      .examples-label { width: 100%; margin: 0; color: var(--muted); font-size: .85rem; text-align: center; }
+      .example {
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--base);
+        box-shadow: var(--raised-sm);
+        color: var(--text);
+        font: 400 .88rem/1.3 var(--body);
+        cursor: pointer;
+        transition: box-shadow .25s var(--ease), color .2s;
+      }
+      .example:hover { box-shadow: var(--inset-sm); color: var(--ink); }
+      .example-intent { display: block; margin-bottom: 4px; color: var(--muted); font-size: .72rem; font-weight: 600; letter-spacing: .035em; text-align: left; text-transform: uppercase; }
+      .example-question { display: block; overflow-wrap: anywhere; text-align: left; }
+
+      .status-line { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 28px; margin: 22px 0 0; color: var(--text); font-size: .92rem; }
+      .pulse { position: relative; flex: none; width: 64px; height: 14px; border-radius: 7px; box-shadow: var(--inset-sm); }
+      .pulse::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 26px;
+        height: 10px;
+        border-radius: 5px;
+        background: linear-gradient(90deg, var(--green), var(--green-hi));
+        box-shadow: 0 0 12px rgba(25, 192, 114, .6);
+        animation: slide 1.1s ease-in-out infinite;
+      }
+      @keyframes slide { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(34px); } }
+      .error { margin: 22px auto 0; max-width: 40rem; padding: 14px 18px; border-radius: 18px; box-shadow: var(--inset-sm); color: var(--red); text-align: left; }
+      .cold-note { margin: 22px auto 0; max-width: 34rem; color: var(--muted); font-size: .82rem; }
+
+      /* How it works + measured results */
+      .about { margin-top: 72px; text-align: left; }
+      body.has-result .about { display: none; }
+      .about h2 { margin: 0 0 18px; color: var(--ink); font: 400 1.25rem/1.2 var(--display); text-align: center; }
+      .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+      .step { position: relative; padding: 22px 20px 20px; border-radius: 18px; background: var(--base); box-shadow: var(--raised-sm); counter-increment: step; }
+      .step::before {
+        content: counter(step);
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        margin-bottom: 14px;
+        border-radius: 10px;
+        background: linear-gradient(145deg, var(--green-hi), var(--green));
+        box-shadow: 4px 4px 10px var(--btn-shadow), -4px -4px 10px var(--hi), 0 0 18px rgba(25, 192, 114, .25);
+        color: #fff;
+        font: 600 .95rem/1 var(--display);
+      }
+      .step h3 { margin: 0 0 6px; color: var(--ink); font: 500 1.05rem/1.25 var(--display); }
+      .step p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.5; }
+      .results { margin-top: 44px; padding: 24px; border-radius: 20px; box-shadow: var(--inset); }
+      .results-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 18px; }
+      .results-head h2 { margin: 0; text-align: left; }
+      .results-head p { margin: 0; color: var(--muted); font-size: .85rem; }
+      .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; }
+      .metric { display: flex; flex-direction: column; padding: 16px; border-radius: 18px; background: var(--base); box-shadow: var(--raised-sm); }
+      .metric dt { margin: 0 0 8px; color: var(--muted); font-size: .82rem; }
+      .metric dd { margin: auto 0 0; color: var(--green-text); font: 400 1.6rem/1 var(--display); letter-spacing: -.02em; }
+      .metric dd small { margin-left: 2px; color: var(--muted); font: 400 .9rem/1 var(--body); letter-spacing: 0; }
+      .results-note { margin: 16px 0 0; color: var(--muted); font-size: .82rem; }
+
+      .result {
+        margin-top: 40px;
+        padding: clamp(22px, 4vw, 34px);
+        border-radius: 22px;
+        background: var(--base);
+        box-shadow: var(--raised);
+        animation: rise .6s var(--ease) both;
+        scroll-margin-top: 20px;
+      }
+      @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+      body.has-result textarea { height: auto; min-height: 58px; max-height: 180px; }
+      .asked { width: fit-content; max-width: 85%; margin: 8px 0 0 auto; text-align: left; padding: 12px 16px; border-radius: 16px 16px 4px 16px; box-shadow: var(--raised-sm); color: var(--ink); font-size: .95rem; overflow-wrap: anywhere; }
+      .result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+      .badge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 10px; box-shadow: var(--inset-sm); color: var(--text); font-size: .84rem; font-weight: 600; }
+      .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .badge.answered { background: linear-gradient(145deg, var(--green-hi), var(--green)); box-shadow: 0 0 16px rgba(25, 192, 114, .3); color: #fff; }
+      .badge.insufficient { color: var(--amber); }
+      .badge.conflicting { color: var(--red); }
+      .answer { min-width: 0; margin: 0; color: var(--ink); font: 400 clamp(1.3rem, 2.6vw, 1.6rem)/1.38 var(--display); letter-spacing: -.012em; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .insufficient-note, .conflicts { margin: 0 0 18px; padding: 14px 18px; border-radius: 18px; box-shadow: var(--inset-sm); font-size: .95rem; }
+      .insufficient-note { color: var(--amber); }
+      .conflicts { color: var(--red); }
+
+      .claims { display: grid; gap: 8px; min-width: 0; margin-top: 22px; }
+      .claim { min-width: 0; overflow-wrap: anywhere; }
+      .claim-heading { margin: 0 0 4px; color: var(--muted); font: 500 .82rem/1.3 var(--body); }
+      .claim-id { margin: 0 0 8px; color: var(--muted); font-size: .76rem; overflow-wrap: anywhere; }
+      .claim-id code, .citation-id code { color: inherit; overflow-wrap: anywhere; }
+      .claim-text { margin: 0 0 12px; font-weight: 500; }
+      details { min-width: 0; margin-top: 9px; border-radius: 16px; box-shadow: var(--inset-sm); overflow: hidden; }
+      summary { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 11px 14px; color: var(--text); font-size: .9rem; font-weight: 500; cursor: pointer; list-style: none; overflow-wrap: anywhere; }
+      summary::-webkit-details-marker { display: none; }
+      summary::before {
+        content: "";
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.4l2.6 2.5L13 6.6' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat;
+        box-shadow: 2px 2px 5px var(--lo), -2px -2px 5px var(--hi);
+      }
+      summary::after { content: ""; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .3s var(--ease); }
+      details[open] summary::after { transform: rotate(225deg); }
+      blockquote { min-width: 0; margin: 4px 14px 0 44px; color: var(--ink); font: italic 400 1.12rem/1.5 var(--quote); overflow-wrap: anywhere; }
+      .citation-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; padding: 10px 14px 14px 44px; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+      .citation-meta a { color: var(--green-text); font-weight: 500; text-underline-offset: 3px; overflow-wrap: anywhere; }
+      .citation-id { flex-basis: 100%; overflow-wrap: anywhere; }
+
+      footer { margin: 44px auto 0; max-width: 36rem; color: var(--muted); font-size: .82rem; text-align: center; }
+
+      @media (max-width: 600px) {
+        main { width: calc(100% - 28px); padding-top: 18px; }
+        .hero { padding-top: 44px; }
+        .capsule { border-radius: 18px; padding: 12px; }
+        .capsule-row { flex-wrap: wrap; }
+        button[type="submit"] { width: 100%; margin-left: 0; }
+        .select-wrap, select { width: 100%; }
+        .result-header { flex-direction: column; align-items: flex-start; }
+        body.has-result .capsule-row { flex-wrap: nowrap; }
+        body.has-result .select-wrap, body.has-result select, body.has-result button[type="submit"] { width: auto; }
+        body.has-result .select-wrap { flex: 1; }
+        body.has-result select { width: 100%; }
+        body.has-result button[type="submit"] { flex: none; padding: 0 18px; }
+        .steps { grid-template-columns: 1fr; }
+        .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        body.has-result .capsule-row { flex-wrap: nowrap; }
+        body.has-result .select-wrap { flex: 1; min-width: 0; }
+        body.has-result select { width: 100%; min-width: 0; }
+        body.has-result button[type="submit"] { width: auto; flex: none; padding: 0 18px; }
+        .examples { justify-content: stretch; gap: 10px; }
+        .example { width: 100%; border-radius: 16px; }
+        blockquote { margin-left: 14px; }
+        .citation-meta { padding-left: 14px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+        button[type="submit"]:hover { transform: none !important; }
+      }
     </style>
   </head>
   <body>
+    <div class="field" aria-hidden="true"></div>
+
     <main>
-      <header class="brand">
+      <header class="topbar">
         <div class="mark" aria-hidden="true">E</div>
-        <div>
-          <div class="brand-name">EvidenceAI</div>
-          <div class="corpus-count">Searching __INDEXED_DOCUMENT_COUNT__ indexed records</div>
-        </div>
-        <nav class="brand-nav" aria-label="Main navigation">
-          <a href="/library">Document library</a>
-        </nav>
+        <div class="brand-name">EvidenceAI</div>
+        <nav aria-label="Main navigation"><a href="/library">Document library</a></nav>
       </header>
 
-      <h1>Investigate with evidence.</h1>
-      <p class="lead">Ask a question that needs information from one or more sources. EvidenceAI checks retrieved passages and shows the exact quotes used for each verified claim.</p>
-      <p class="cold-note">This demo runs on free hosting. The first visit after inactivity may take approximately one minute to load.</p>
+      <section class="hero" aria-labelledby="page-title">
+        <p class="corpus">Searching __INDEXED_DOCUMENT_COUNT__ indexed records</p>
+        <h1 id="page-title">Ask a question</h1>
 
-      <section class="panel" aria-labelledby="question-label">
-        <form id="investigation-form">
-          <label id="question-label" for="question">Your question</label>
-          <textarea id="question" name="question" minlength="3" maxlength="1000" required placeholder="Which system change affected payment processing, and what evidence links it to the incident?" autocomplete="off"></textarea>
-          <div class="controls">
-            <div class="mode">
-              <label for="retrieval-mode">Retrieval mode</label>
-              <select id="retrieval-mode" name="retrieval_mode">
-                <option value="semantic" selected>Semantic (recommended)</option>
-                <option value="keyword">Keyword</option>
-                <option value="hybrid">Hybrid</option>
-              </select>
-              <div class="hint">Semantic retrieval is the measured default for investigations.</div>
+        <div class="stage">
+          <form id="investigation-form" class="capsule">
+            <label id="question-label" class="visually-hidden" for="question">Your question</label>
+            <textarea id="question" name="question" minlength="3" maxlength="1000" required rows="3" aria-describedby="question-hint" aria-keyshortcuts="Enter" placeholder="Which company oversees Cyma Watches, and when was it founded?" autocomplete="off"></textarea>
+            <span id="question-hint" class="visually-hidden">Press Enter to investigate, or Shift plus Enter to add a new line. Up to 1000 characters.</span>
+            <div class="capsule-row">
+              <div class="select-wrap">
+                <label class="visually-hidden" for="retrieval-mode">Retrieval mode</label>
+                <select id="retrieval-mode" name="retrieval_mode">
+                  <option value="semantic" selected>Semantic (recommended)</option>
+                  <option value="keyword">Keyword</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+              <button id="submit-button" type="submit">Investigate</button>
             </div>
-            <button id="submit-button" type="submit">Investigate</button>
-          </div>
-        </form>
-        <div id="loading" class="status-line" role="status" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span><span>Searching sources and checking citations…</span></div>
+          </form>
+          <div class="ground" aria-hidden="true"></div>
+        </div>
+
+        <p id="asked-question" class="asked" aria-live="polite" hidden></p>
+        <div id="loading" class="status-line" role="status" aria-live="polite" hidden><span class="pulse" aria-hidden="true"></span><span>Searching sources and checking citations…</span></div>
         <div id="error" class="error" role="alert" hidden></div>
+
+        <div id="examples" class="examples" role="group" aria-label="Example questions">
+          <p class="examples-label">Example questions</p>
+          <button class="example" type="button" data-question="Which company oversees Cyma Watches, and when was it founded?"><span class="example-question">Which company oversees Cyma Watches, and when was it founded?</span></button>
+          <button class="example" type="button" data-question="Which Egyptian president was rapper Sadat X named after?"><span class="example-question">Which Egyptian president was rapper Sadat X named after?</span></button>
+          <button class="example" type="button" data-question="Who won the 2031 Champions League?"><span class="example-intent">Insufficient evidence example</span><span class="example-question">Who won the 2031 Champions League?</span></button>
+        </div>
+        <p class="cold-note">This demo runs on free hosting. The first visit after inactivity may take approximately one minute to load.</p>
+
+        <section class="about" aria-labelledby="about-heading">
+          <h2 id="about-heading">How an answer is built</h2>
+          <ol class="steps">
+            <li class="step"><h3>Search</h3><p>Semantic search finds the most relevant passages in the Wikipedia corpus and your uploaded documents.</p></li>
+            <li class="step"><h3>Connect</h3><p>The agent runs up to four follow-up searches to link facts that live in different documents.</p></li>
+            <li class="step"><h3>Check citations</h3><p>Each displayed claim includes a verbatim quote from retrieved evidence. Quote matching checks presence, not whether the source logically entails the claim.</p></li>
+          </ol>
+
+          <div class="results">
+            <div class="results-head"><h2>Final evaluation snapshot</h2><p>45 cases: 38 live-path and 7 isolated conflict fixtures</p></div>
+            <dl class="metrics">
+              <div class="metric"><dt>Overall live cases correct</dt><dd>27<small>/38</small></dd></div>
+              <div class="metric"><dt>Single-hop answer span</dt><dd>5<small>/5</small></dd></div>
+              <div class="metric"><dt>Multi-hop / cross-document</dt><dd>14<small>/25</small></dd></div>
+              <div class="metric"><dt>Unanswerable cases correctly abstained</dt><dd>8<small>/8</small></dd></div>
+            </dl>
+            <p class="results-note">Semantic retrieval-only supporting-title Recall@10 was 0.8833 across 30 answerable final cases. This is retrieval recall, not answer accuracy.</p>
+            <p class="results-note"><strong>Post-hoc conflict recheck:</strong> 7/7 fixtures returned a conflicting status after a fix selected using development fixtures only. The frozen original result was 1/7; the rerun is separate from the original score and is not a fresh unbiased holdout.</p>
+          </div>
+        </section>
       </section>
 
-      <section id="result" class="panel result" aria-live="polite" hidden>
-        <div class="result-header"><h2>Investigation result</h2><span id="result-status" class="badge"></span></div>
+      <section id="result" class="result" aria-live="polite" aria-labelledby="result-heading" tabindex="-1" hidden>
+        <div class="result-header"><h2 id="result-heading" class="visually-hidden">Investigation result</h2><span id="result-status" class="badge"></span></div>
         <div id="insufficient" class="insufficient-note" hidden>EvidenceAI could not verify enough evidence to support a central answer.</div>
         <div id="conflicts" class="conflicts" hidden></div>
         <p id="answer" class="answer"></p>
         <div id="claims" class="claims"></div>
       </section>
+
       <footer>EvidenceAI verifies citation presence and exact quotes. Quote matching alone does not prove that a source entails a claim.</footer>
     </main>
 
@@ -122,6 +435,16 @@
         const claims = document.getElementById("claims");
         const conflicts = document.getElementById("conflicts");
         const insufficient = document.getElementById("insufficient");
+        const examples = document.getElementById("examples");
+        const askedQuestion = document.getElementById("asked-question");
+        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let firstCitationPending = true;
+
+        const statusLabels = {
+          answered: "Answered",
+          insufficient: "Insufficient evidence",
+          conflicting: "Conflicting sources",
+        };
 
         function element(tag, className, text) {
           const node = document.createElement(tag);
@@ -130,68 +453,118 @@
           return node;
         }
 
+        function resizeQuestion() {
+          question.style.height = "auto";
+          const compactHeight = document.body.classList.contains("has-result") ? 58 : 104;
+          const nextHeight = Math.min(Math.max(question.scrollHeight, compactHeight), 280);
+          question.style.height = `${nextHeight}px`;
+        }
+
+        question.addEventListener("input", resizeQuestion);
+        resizeQuestion();
+
+        for (const example of examples.querySelectorAll(".example")) {
+          example.addEventListener("click", () => {
+            question.value = example.dataset.question || "";
+            resizeQuestion();
+            question.focus();
+          });
+        }
+
+        question.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !event.shiftKey && !event.isComposing
+              && !event.ctrlKey && !event.altKey && !event.metaKey) {
+            event.preventDefault();
+            form.requestSubmit();
+          }
+        });
+
         function renderResponse(data) {
           result.hidden = false;
-          status.textContent = data.status;
+          status.textContent = statusLabels[data.status] || data.status;
           status.className = `badge ${data.status}`;
           const answerText = typeof data.answer === "string" ? data.answer : "";
           answer.textContent = answerText;
-          const normalizedAnswer = answerText.replace(/\s+/g, " ").trim().toLowerCase();
           claims.replaceChildren();
           insufficient.hidden = data.status !== "insufficient";
           conflicts.hidden = data.status !== "conflicting";
           conflicts.textContent = data.status === "conflicting"
             ? "Retrieved sources contain incompatible, citation-verified claims. Review the quoted sources below."
             : "";
+          firstCitationPending = true;
 
-          for (const [index, claim] of (Array.isArray(data.claims) ? data.claims : []).entries()) {
+          for (const [claimIndex, claim] of (Array.isArray(data.claims) ? data.claims : []).entries()) {
             const card = element("article", "claim");
             const claimText = typeof claim.text === "string" ? claim.text : "";
-            const normalizedClaim = claimText.replace(/\s+/g, " ").trim().toLowerCase();
-            const claimId = typeof claim.claim_id === "string" ? claim.claim_id : String(index + 1);
-            card.append(element("h3", "claim-heading", `Evidence for claim ${claimId}`));
-            if (normalizedClaim && normalizedAnswer.includes(normalizedClaim)) {
-              card.append(element("p", "claim-reference", "Claim text is shown in the answer above."));
-            } else if (claimText) {
-              card.append(element("p", "claim-text", claimText));
+            card.append(element("h3", "claim-heading", `Evidence supporting statement ${claimIndex + 1}`));
+            if (typeof claim.claim_id === "string" && claim.claim_id) {
+              const claimId = element("p", "claim-id", "Claim ID: ");
+              claimId.append(element("code", "", claim.claim_id));
+              card.append(claimId);
             }
+            if (claimText) card.append(element("p", "claim-text", claimText));
             for (const citation of (Array.isArray(claim.citations) ? claim.citations : [])) {
               const details = element("details");
-              const chunk = typeof citation.chunk_id === "string" ? citation.chunk_id : "verified source";
-              details.append(element("summary", "", `Verified citation · ${chunk}`));
-              details.append(element("blockquote", "", citation.quote || ""));
-              const meta = element("div", "citation-meta");
+              details.open = firstCitationPending;
+              firstCitationPending = false;
               const titles = Array.isArray(citation.titles) ? citation.titles : [];
-              if (titles.length) meta.append(element("span", "", `Source titles: ${titles.join("; ")}`));
+              const sourceName = titles.length ? titles.join(", ") : "a retrieved source";
+              details.append(element("summary", "", `Verified citation from ${sourceName} · show exact quote`));
+              details.append(element("blockquote", "", typeof citation.quote === "string" ? citation.quote : ""));
+              const meta = element("div", "citation-meta");
               for (const source of (Array.isArray(citation.sources) ? citation.sources : [])) {
+                if (typeof source.title === "string" && source.title) {
+                  meta.append(element("span", "", `Source title: ${source.title}`));
+                }
                 if (typeof source.url === "string" && /^https?:\/\//i.test(source.url)) {
-                  const link = element("a", "", source.title || "Open source");
+                  const link = element("a", "", source.title ? `Open ${source.title}` : "Open source");
                   link.href = source.url;
                   link.target = "_blank";
                   link.rel = "noopener noreferrer";
                   meta.append(link);
                 }
               }
+              if (typeof citation.chunk_id === "string") {
+                meta.append(element("span", "citation-id", "Passage ID: "));
+                meta.lastChild.append(element("code", "", citation.chunk_id));
+              }
               details.append(meta);
               card.append(details);
             }
             claims.append(card);
           }
+          result.focus({preventScroll: true});
+          result.scrollIntoView({behavior: reducedMotion.matches ? "auto" : "smooth", block: "start"});
         }
 
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
+          if (button.disabled) return;
+          const askedText = question.value.trim();
+          if (askedText.length < 3 || askedText.length > 1000) {
+            error.textContent = "Enter a question between 3 and 1000 characters.";
+            error.hidden = false;
+            question.focus();
+            return;
+          }
+          askedQuestion.textContent = askedText;
+          askedQuestion.hidden = false;
+          document.body.classList.add("has-result");
+          question.value = "";
+          resizeQuestion();
+          question.placeholder = "Ask a new question";
           error.hidden = true;
           error.textContent = "";
           result.hidden = true;
           loading.hidden = false;
           button.disabled = true;
+          form.classList.add("is-working");
           try {
             const response = await fetch("/api/investigate", {
               method: "POST",
               headers: {"Content-Type": "application/json", "Accept": "application/json"},
               body: JSON.stringify({
-                question: question.value,
+                question: askedText,
                 retrieval_mode: document.getElementById("retrieval-mode").value,
               }),
               signal: AbortSignal.timeout(100000),
@@ -200,21 +573,25 @@
             if (!response.ok) {
               const messages = {
                 422: "Enter a question between 3 and 1000 characters.",
-                429: data.detail || "The request limit was reached. Please try again shortly.",
+                429: data.detail || "The request limit was reached. Try again in a minute.",
                 503: data.detail || "The investigation service is temporarily unavailable.",
-                504: data.detail || "The investigation timed out. Please try again.",
+                504: data.detail || "The investigation timed out. Try a shorter, more focused question.",
               };
               throw new Error(messages[response.status] || "The investigation could not be completed.");
             }
             renderResponse(data);
           } catch (failure) {
             error.textContent = failure.name === "TimeoutError"
-              ? "This investigation took too long. Please try a shorter or more focused question."
-              : (failure.message || "A network error occurred. Please try again.");
+              ? "This investigation took too long. Try a shorter, more focused question."
+              : (failure.message || "The network request failed. Check your connection and try again.");
             error.hidden = false;
+            if (!question.value) question.value = askedText;
+            resizeQuestion();
+            question.focus();
           } finally {
             loading.hidden = true;
             button.disabled = false;
+            form.classList.remove("is-working");
           }
         });
       })();
