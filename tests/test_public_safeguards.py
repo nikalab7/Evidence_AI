@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
 from threading import Barrier, Event, Lock, Thread
 from time import sleep
 
@@ -25,19 +24,20 @@ def test_daily_reservations_are_atomic_under_concurrent_requests():
     assert limiter.snapshot() == {"daily_reserved": 3, "active": 3}
 
 
-def test_rate_concurrency_and_utc_day_limits_have_clear_reasons():
+def test_rate_concurrency_and_rolling_daily_limit_have_clear_reasons():
     limiter = InvestigationLimiter(
         daily_budget=2, per_ip_per_minute=1, max_concurrent=1,
     )
-    today = date(2026, 10, 25)
-    assert limiter.reserve("one", now=10, utc_day=today) is None
-    assert limiter.reserve("two", now=11, utc_day=today).reason == "concurrent"
+    assert limiter.reserve("one", now=10) is None
+    assert limiter.reserve("two", now=11).reason == "concurrent"
     limiter.release()
-    assert limiter.reserve("one", now=12, utc_day=today).reason == "per_ip"
-    assert limiter.reserve("two", now=12, utc_day=today) is None
+    assert limiter.reserve("one", now=12).reason == "per_ip"
+    assert limiter.reserve("two", now=12) is None
     limiter.release()
-    assert limiter.reserve("three", now=13, utc_day=today).reason == "daily"
-    assert limiter.reserve("three", now=14, utc_day=today + timedelta(days=1)) is None
+    daily_rejection = limiter.reserve("three", now=13)
+    assert daily_rejection.reason == "daily"
+    assert daily_rejection.retry_after_seconds == 86_397
+    assert limiter.reserve("three", now=86_410) is None
     limiter.release()
 
 

@@ -79,10 +79,14 @@ deployment behavior.
 ## Quota protection and limit
 
 The process-local limiter implements a rolling per-IP limit, an atomic
-application-process daily reservation counter, and a concurrent request cap.
+application-process rolling-24-hour reservation counter, and a concurrent request cap.
 The daily unit is reserved before work begins and is not refunded on failure,
 because a provider request may already have consumed quota. A single
-investigation may issue up to five Gemini HTTP attempts.
+investigation may issue up to five Gemini HTTP attempts. The rolling 24-hour
+window is conservative against Gemini's midnight-Pacific RPD reset, avoiding
+an extra allowance at a separate UTC calendar boundary; Google's [rate-limit
+guide](https://ai.google.dev/gemini-api/docs/rate-limits) documents that RPD
+resets at midnight Pacific time.
 
 `INVESTIGATION_DAILY_BUDGET=0` is the committed fail-closed default. No
 arbitrary positive cap was selected: Gemini quota is specific to the API

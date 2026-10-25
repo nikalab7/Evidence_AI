@@ -59,7 +59,7 @@ def _limit_response(rejection: LimitRejection) -> HTTPException:
         )
     messages = {
         "per_ip": "Too many investigations from this network. Please try again shortly.",
-        "daily": "The demo has reached today's investigation limit. Please try again tomorrow.",
+        "daily": "The demo has reached its investigation limit. Please try again after the cooldown.",
         "concurrent": "EvidenceAI is busy with other questions. Please try again shortly.",
     }
     return HTTPException(

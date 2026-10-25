@@ -62,11 +62,14 @@ verified, the agent abstains. Quote presence is not a factual-entailment test.
 ## Abuse limits and quota behavior
 
 The API enforces a 16 KiB JSON body limit, strict question validation, a
-per-IP rolling request limit, a daily investigation budget, and a concurrent
+per-IP rolling request limit, a rolling 24-hour investigation budget, and a concurrent
 request cap. Reservations are atomic within a Python process; each admitted
 investigation reserves one daily unit, even if it fails, because an upstream
 request may already have consumed quota. An investigation may make up to five
 Gemini HTTP requests.
+
+The rolling 24-hour window is conservative against Gemini's daily reset at
+midnight Pacific time; it does not require timezone data in the runtime.
 
 These counters live only in process memory. They reset after restart/spin-down
 and are not shared across multiple workers or instances. Therefore they are a
