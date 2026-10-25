@@ -16,8 +16,10 @@ records.
   comparison and demonstration.
 - `GET /health` returns process liveness only. It does not test Supabase or
   Gemini.
-- OpenAPI, Swagger, and ReDoc routes are disabled. No admin or document CRUD
-  operation is exposed by this milestone.
+- `GET /library` serves the administrator document-management interface.
+- `/api/documents` provides authenticated upload, list, inspect, replace, and
+  delete operations; the original indexed corpus is not owner-managed.
+- OpenAPI, Swagger, and ReDoc routes are disabled.
 
 The page presents the 50,000-record corpus size, the free-hosting cold-start
 notice, request progress, sanitized errors, citations, exact quotes, and clear
@@ -132,10 +134,10 @@ The dedicated Frankfurt Supabase project is
 Supabase URL identifies that project. Mindo and the former Sydney project are
 not used by the application.
 
-## Current verification boundary
+## Verification notes
 
 Local API contract and scripted-agent tests exercise successful citation
 validation and abstention over HTTP. They do not substitute for a live Gemini
 quota check, live public Render request, Render memory measurement, or a
-post-idle cold-start test. See `reports/phase4a_web_app.md` for the exact
+post-idle cold-start test. See `reports/archive/phase4a_web_app.md` for the exact
 verified results and pending operator actions.

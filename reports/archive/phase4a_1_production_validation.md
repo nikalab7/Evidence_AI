@@ -24,7 +24,7 @@ against authenticated Render logs in this work session:
 The owner later shared a successful answer to “The company that oversees Cyma
 Watches was founded when?” It combines the Cyma Watches and Universal Genève
 source passages and returns two distinct chunk IDs. See
-[`docs/INTERVIEW_DEMO.md`](../docs/INTERVIEW_DEMO.md) for the exact answer and
+[`docs/INTERVIEW_DEMO.md`](../../docs/INTERVIEW_DEMO.md) for the exact answer and
 quotes. This is owner-provided live output, not an independently repeated
 request or verified Render log.
 

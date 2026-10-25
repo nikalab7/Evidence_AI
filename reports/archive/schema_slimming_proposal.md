@@ -5,7 +5,7 @@ Date: 2026-10-24
 **Status: historical analysis and proposal only.** These measurements describe
 the former Mindo-backed project, which was not modified during Phase 1E. The
 approved optimized schema was applied additively to the dedicated Evidence_AI
-project, with no destructive operations. See `reports/phase_1e_optimized.md`
+project, with no destructive operations. See `reports/archive/phase_1e_optimized.md`
 for the actual schema, storage, security, and retrieval results.
 
 The halfvec cast measurements below are historical. `scripts/benchmark_halfvec.py`

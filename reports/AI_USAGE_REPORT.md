@@ -56,8 +56,8 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   Evidence_AI project is `csenhlrsttuukzwglttf`; the current Frankfurt target
   is `nldnpqhqrfwjgxcqeuru`, PostgreSQL 17.11 with pgvector 0.8.2. The measured
   Frankfurt database size after the 1K load is 18,478,771 bytes. Storage
-  projections remain estimates; see `reports/region_migration.md` and the
-  historical snapshot `reports/phase_1e_optimized.md`.
+  projections remain estimates; see `reports/archive/region_migration.md` and the
+  historical snapshot `reports/archive/phase_1e_optimized.md`.
 - The owner supplied a Render startup log showing the 384-dimensional FastEmbed
   check passed, with 0.1003s embedding latency and 300,912,640 bytes peak process
   RSS. Local build-time cache and two local restart checks passed; a post-change
@@ -118,7 +118,7 @@ Local planning and personal preparation notes are excluded from the repository.
 - Live checks measured Frankfurt connection/`SELECT 1` latency, exact corpus
   and chunk reconstruction, security grants, retrieval, and Gemini answer and
   abstention behavior. The full suite passed 106 tests. Actual measurements,
-  limitations, and Render follow-up steps are in `reports/region_migration.md`.
+  limitations, and Render follow-up steps are in `reports/archive/region_migration.md`.
 
 ## Phase 5 addition — 2026-10-25
 
@@ -167,7 +167,7 @@ Local planning and personal preparation notes are excluded from the repository.
   workspace. The daily budget remains zero (API disabled) until the owner
   checks quota and configures a safe cap. Request-time Render RSS, public URL,
   cold start, and two-live-request checks remain pending; see
-  `reports/phase4a_web_app.md`.
+  `reports/archive/phase4a_web_app.md`.
 
 ## Phase 4A.1 production validation addition — 2026-10-25
 
@@ -176,7 +176,7 @@ Local planning and personal preparation notes are excluded from the repository.
   the page while retaining citations, and harden per-IP limiting by ignoring
   caller-controlled `X-Forwarded-For`, validating Cloudflare's single client-IP
   header, and disabling Uvicorn proxy-header rewriting.
-- Added local regression tests and `reports/phase4a_1_production_validation.md`
+- Added local regression tests and `reports/archive/phase4a_1_production_validation.md`
   with the owner-run live verification sequence. The full local suite passed
   151 tests.
 - No Render deployment, public API request, Gemini call, or database query was
@@ -229,14 +229,14 @@ Local planning and personal preparation notes are excluded from the repository.
 - No Supabase connection, SQL migration, Render setting, or deployment action
   was performed. No PostgreSQL server was available for integration testing;
   the migration, database transaction behavior, grants, and live upload memory
-  remain unverified. See `reports/phase6b_1_safety_review.md` for the operator
+  remain unverified. See `reports/archive/phase6b_1_safety_review.md` for the operator
   checklist and pending gates.
 
 ## Phase 6B.2 activation preflight — 2026-10-25
 
 - Codex assistance was used to run a sanitized local tool/configuration check,
   verify the local test suite, and document the activation gate results and
-  operator handoff in `reports/phase6b_2_activation.md`.
+  operator handoff in `reports/archive/phase6b_2_activation.md`.
 - Docker/Podman and a local PostgreSQL service were unavailable, so real
   PostgreSQL integration could not start. No production connection, migration,
   CRUD operation, Render setting change, or deployment was attempted. The

@@ -1,27 +1,45 @@
 # EvidenceAI
 
-EvidenceAI is a Python investigation engine that searches a 50,000-paragraph
-HotpotQA corpus and produces evidence-linked answers to questions that may
-require more than one source. It combines semantic and PostgreSQL full-text
-retrieval with a bounded Gemini tool loop and validates every returned source
-quote.
+EvidenceAI is a Python app for investigating questions across multiple
+documents. It searches a 50,000-paragraph HotpotQA corpus using semantic and
+keyword retrieval, then uses a bounded Gemini agent to connect evidence and
+prepare answers with citations. Before returning a citation, it checks that
+the quoted text appears in the retrieved source.
 
 **Live demo:** [evidence-ai-frankfurt.onrender.com](https://evidence-ai-frankfurt.onrender.com/)
-This URL and the successful live examples below were supplied by the project
-owner. This packaging audit did not check the current Render deployment or
-deployed commit.
 
-## Capabilities
+The demo URL and live examples were provided by the project owner. The current
+Render deployment has not been independently rechecked.
 
-- Ingest and manage PDF, DOCX, UTF-8 TXT, and Markdown documents. Scanned
-  image-only PDFs are rejected; OCR is not provided.
-- Preserve canonical document text once, provenance, title aliases, stable
-  content IDs, and chunk character offsets.
-- Search with semantic, English full-text keyword, or hybrid retrieval.
-- Investigate multi-step questions with retrieved evidence and cited claims.
-- Abstain when evidence is insufficient and report model-detected conflicts.
-- Protect document-management routes with server-side administrator
-  authentication.
+## Project structure
+
+| Folder | What's inside |
+| --- | --- |
+| [app/](app/) | The API, document processing, search, Gemini agent, citation checks, and web pages |
+| [scripts/](scripts/) | Commands for building the corpus, running evaluations, and troubleshooting |
+| [tests/](tests/) | Automated tests and sample upload files |
+| [eval/](eval/) | Development questions and the final 45-question evaluation set |
+| [migrations/](migrations/) | Database schema and migration proposals |
+| [docs/](docs/) | Technical design, data preparation, and implementation notes |
+| [reports/](reports/README.md) | Evaluation results, measurements, and earlier experiments |
+
+Start with the [architecture overview](docs/ARCHITECTURE.md) if you want to
+understand how the parts fit together. The [evaluation report](EVALUATION_REPORT.md)
+covers what worked, what failed, and how the results were measured. AI assistance
+is documented in the [AI usage report](AI_USAGE_REPORT.md).
+
+## What it does
+
+- Accepts text-based PDFs, DOCX, TXT, and Markdown files. Scanned PDFs need
+  OCR beforehand; OCR is not built in.
+- Stores document text and source details so each retrieved passage can be
+  traced back to its document.
+- Offers semantic, keyword, and hybrid search.
+- Answers questions that may involve several sources, with quoted evidence
+  attached to the claims.
+- Returns insufficient evidence when it cannot support an answer, and can
+  flag conflicting claims found by the agent.
+- Restricts uploading, replacing, and deleting documents to administrators.
 
 ## Architecture
 
