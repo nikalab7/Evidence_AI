@@ -120,7 +120,8 @@ clear. Stop on any 429 or unexpected service error; do not retry repeatedly.
 
 Example PowerShell checks (substitute the verified public service URL only).
 The POST command below is an example for the owner to run after checking the
-remaining app/Gemini quota; it was not executed here:
+remaining app/Gemini quota; it was not executed here. If running the five-call
+sequence below, skip this example POST so it does not use an extra slot:
 
 ```powershell
 $base = 'https://evidence-ai-frankfurt.onrender.com'
