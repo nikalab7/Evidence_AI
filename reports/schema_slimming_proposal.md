@@ -127,8 +127,8 @@ PostgreSQL documents that GIN can defer index-entry work to a pending list and
 that vacuum/autoanalyze or a list threshold can move entries into the main
 index. This is a possible mechanism, **not a verified explanation** for these
 measurements. No before/after pending-list measurement was collected, so the
-cause remains unknown. See [PostgreSQL GIN tips](https://www.postgresql.org/docs/current/gin-tips.html)
-and [GIN implementation](https://www.postgresql.org/docs/current/gin-implementation.html).
+cause remains unknown. See [PostgreSQL's GIN index chapter](https://www.postgresql.org/docs/current/gin.html)
+for index implementation and operational guidance.
 
 ## Local embedding-thread benchmark
 

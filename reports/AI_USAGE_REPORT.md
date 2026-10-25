@@ -83,7 +83,7 @@ Tool: OpenAI Codex. AI assistance is disclosed as a project deliverable.
   answer correctness or entailment.
 - The ingestion report records the actual first-run database size change and a
   later size increase observed across a zero-insert rerun; the cause of that
-  increase was not established. See reports/ingestion_100.md.
+  increase was not established. See reports/archive/ingestion_100.md.
 - Independent non-AI implementation contributions are not recorded at this stage.
 
 Local planning and personal preparation notes are excluded from the repository.
@@ -104,7 +104,7 @@ Local planning and personal preparation notes are excluded from the repository.
 - Actual local checks used the configured `gemini-3.5-flash-lite` model and the
   fail-closed Evidence_AI Supabase project. One real investigation abstained and
   one returned an answer with one validated citation. Exact request/token and
-  timing details are in `reports/phase3_investigation.md`.
+  timing details are in `reports/archive/phase3_investigation.md`.
 - The deployed Render region, environment, and build settings were not
   accessible and are still unverified. No Render deployment was triggered.
 
@@ -351,7 +351,7 @@ Local planning and personal preparation notes are excluded from the repository.
   45-case held-out evaluation has not been run. No production write, schema
   change, deployment, Mindo/Sydney access, or held-out Gemini request occurred.
 - The complete local suite passed 229 tests. See
-  `reports/phase7_1_live_smoke.md` and `reports/final_evaluation.md` for
+  `reports/archive/phase7_1_live_smoke.md` and `reports/final_evaluation.md` for
   measurements and reproduction commands.
 
 ## Phase 7.3 final evaluation - 2026-10-25

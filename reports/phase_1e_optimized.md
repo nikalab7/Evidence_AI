@@ -134,7 +134,7 @@ differ; 50K has not been loaded or capacity-verified.
 ## Retrieval comparison
 
 The prior baseline is the post-OR evaluation recorded in
-`reports/hybrid_retrieval.md` against the former Mindo-backed 1K subset. Both
+`reports/archive/hybrid_retrieval.md` against the former Mindo-backed 1K subset. Both
 runs used the same 82 eligible questions, top K=10, candidate K=20, and
 equal-weight RRF (1:1, k=60). Relevance is supporting-title match, not sentence
 entailment or answer correctness.

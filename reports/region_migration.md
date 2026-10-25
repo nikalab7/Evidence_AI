@@ -60,7 +60,7 @@ A real cosine-distance SQL benchmark used an independently embedded natural-lang
 
 ## Retrieval evaluation
 
-The evaluation used the same 82 fully evidenced dev questions, BGE-small, candidate K=20, output K=10, and equal-weight RRF (`semantic=1`, `keyword=1`, `k=60`). The Sydney comparison is the verified Phase 1E run with the same optimized schema and title-weighted FTS. Metrics are title-level recall/MRR, not answer correctness or sentence entailment. The older Mindo-backed figures in `reports/hybrid_retrieval.md` are not used as the region baseline.
+The evaluation used the same 82 fully evidenced dev questions, BGE-small, candidate K=20, output K=10, and equal-weight RRF (`semantic=1`, `keyword=1`, `k=60`). The Sydney comparison is the verified Phase 1E run with the same optimized schema and title-weighted FTS. Metrics are title-level recall/MRR, not answer correctness or sentence entailment. The older Mindo-backed figures in `reports/archive/hybrid_retrieval.md` are not used as the region baseline.
 
 | Mode | Sydney Recall@5 | Frankfurt Recall@5 | Sydney Recall@10 | Frankfurt Recall@10 | Sydney MRR | Frankfurt MRR | Sydney median | Frankfurt median |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
