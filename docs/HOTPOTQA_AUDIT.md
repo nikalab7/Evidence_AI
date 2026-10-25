@@ -1,8 +1,9 @@
 # HotpotQA Corpus Audit
 
-This audit examines the candidate corpus and evaluation evidence without
-writing dataset records to Supabase. It streams a pinned public dataset
-revision and stores only aggregate counts in `reports/hotpotqa_audit.json`.
+This is the initial HotpotQA source audit, performed before the full corpus
+was indexed. It streams a pinned dataset revision and records aggregate
+counts in `reports/hotpotqa_audit.json`. The later 50,000-document ingestion
+and final evaluation are documented separately.
 
 ## Reproducible source
 
@@ -74,19 +75,19 @@ questions (57.36%). The train+validation union contains the validation source
 contexts, so its 99.994% evidence presence is a source-availability check, not
 a retrieval-quality result.
 
-The new content-hash corpus selection and evidence audit are recorded separately
-in [`reports/corpus_audit.json`](../reports/corpus_audit.json). That local-only
-run reached 50,000 unique paragraph texts and 100% selected support coverage.
-The selected files have since been materialized. `data/corpus.jsonl` remains
-local and Git-ignored, and exactly 100 unique documents from it have been
-ingested into Supabase in Phase 1C. This 100-document slice is not a full-scale
-capacity result.
+The subsequent content-hash selection is documented in
+[`reports/corpus_audit.json`](../reports/corpus_audit.json). It selected
+50,000 unique paragraph texts and checked their supporting evidence.
+The generated `data/corpus.jsonl` remains local and Git-ignored.
+The first Phase 1C pilot indexed 100 documents. Later, Phase 5 indexed
+the full 50,000 records; see the
+[capacity report](../reports/capacity_50k.md).
 
 The validation split contains 5,918 bridge and 1,487 comparison questions, all
-marked `hard` in this dataset revision. It does not supply absent-answer or
-conflicting cases, and it does not cover a simple-question category. Those
-cases must be added to the separate evaluation set before evaluation is
-considered complete.
+marked `hard` in this dataset revision. It does not supply absent-answer,
+conflicting, or simple-question cases. Those categories were subsequently
+included in the separate 45-case
+[final evaluation](../EVALUATION_REPORT.md).
 
-Full-scale ingestion remains gated on reviewing the selected outputs and
-measuring Supabase storage at staged loads.
+The staged capacity checks were later completed during the full ingestion.
+This file retains the original dataset-scan measurements.

@@ -2,6 +2,11 @@
 
 Date: 2026-10-24
 
+This is an early startup and model-loading measurement from before the
+investigation interface and document management were added. It is a useful
+baseline, **not** a measurement of the complete application under live
+investigation or upload load.
+
 ## Scope
 
 This check loads `BAAI/bge-small-en-v1.5`, embeds one query, verifies its
@@ -103,7 +108,8 @@ the pending Render restart check.
 
 ## Safety checks
 
-- `/health` is the only registered route.
+- At this early preflight checkpoint, `/health` was the only registered route.
+  The later app also serves investigation and document-management routes.
 - `/docs` and `/openapi.json` returned 404 in automated tests.
 - Vectors and credentials are absent from HTTP responses and startup logs.
 - `render.yaml` contains no service credentials and disables automatic deploys.

@@ -3,7 +3,9 @@
 The main findings are in the [Evaluation Report](../EVALUATION_REPORT.md).
 This folder contains the measurements and notes behind those results. Each
 report describes a particular test or run, so its numbers should be read in
-that context rather than treated as live performance statistics.
+that context rather than treated as live performance statistics. Some earlier
+reports mention migrations or deployments that were pending at the time; the
+main README and requirements coverage include later updates.
 
 ## Key reports
 

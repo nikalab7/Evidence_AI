@@ -50,6 +50,7 @@ coverage check requires every selected supporting title and exact normalized
 support sentence to exist under that title. Coverage does not establish factual
 entailment. Estimated tokens are approximate characters divided by four.
 
-The 40 HotpotQA cases are candidates, not a completed final evaluation set. The
-plan later chooses 25 multi-hop cases and adds five single-hop, eight
-unanswerable, and seven conflicting cases.
+The 40 HotpotQA cases were a candidate pool, not the final evaluation set.
+The completed [final evaluation](../EVALUATION_REPORT.md) contains 45 cases:
+25 multi-hop, five single-hop, eight unanswerable, and seven conflict fixtures.
+Development and final questions were kept separate.

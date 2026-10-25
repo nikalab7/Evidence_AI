@@ -1,8 +1,15 @@
 # Semantic retrieval after managed-document replacement
 
+This report documents the initial failure and the local fix tested on
+October 25, 2026. References below to a fix not yet being deployed describe
+**that original test session**, not the project's current implementation.
+A later follow-up in the [README](../README.md) reports a successful
+citation-bearing response after deployment. The precise cause of the
+earlier production failure remains uncertain.
+
 Date: 2026-10-25
 
-## Status
+## Status during the original investigation
 
 The production symptom was reproduced once through the existing public
 Frankfurt API: HTTP 200, `status=insufficient`, zero claims, and zero citations.
@@ -104,10 +111,10 @@ from normal candidates. A separate test confirms questions with no exact title
 reference and questions whose exact title is already ranked keep their original
 semantic results.
 
-## What remains uncertain
+## What was uncertain during that investigation
 
-- The public Render request still reproduces the symptom on the version that
-  was deployed during this check. The local correction has not been deployed.
+- The version deployed during this check still returned `insufficient`;
+  the correction had not been deployed at that point.
 - The old request cannot be classified as retrieval miss, Gemini abstention,
   missing citation, or rejected citation because the deployed version did not
   log a sanitized diagnostic outcome. The new log event will distinguish these
@@ -115,8 +122,8 @@ semantic results.
 - The title rescue is deliberately conservative: it will not rescue aliases
   matching more than 25 content-addressed documents. Ambiguous title collisions
   therefore continue through ordinary semantic ranking.
-- The public endpoint result remains an operational blocker until the corrected
-  commit is deployed and the exact question returns a verified citation.
+- At that checkpoint, the issue required a deployment and a
+  citation-bearing rerun; the later follow-up reported success.
 
 ## Verification commands
 
@@ -126,10 +133,10 @@ semantic results.
 git diff --check
 ```
 
-Full suite: **206 passed**. `git diff --check` passed. The public Render request is still insufficient until the corrected
-commit is manually deployed; no deployment was done here.
+Full suite at this checkpoint: **206 passed**. `git diff --check` passed.
+The deployed service still returned insufficient evidence at the time.
 
-## Manual Render deployment and check
+## Original follow-up deployment procedure
 
 Deploy the final pushed commit to the existing `evidence-ai-frankfurt` service
 with its auto-deploy setting unchanged. The checked-in Blueprint commands are:

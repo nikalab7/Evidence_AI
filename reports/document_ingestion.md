@@ -1,19 +1,26 @@
-# Phase 6B — Document Ingestion, Management, and Chunking
+# Document ingestion and management
 
-## Status and safety boundary
+This report covers the original Phase 6B implementation and chunking
+comparison. **The deployment status in this report is historical:** during
+the initial tests, the managed-upload migration had not been applied. The
+later [activation record](archive/phase6b_2_activation.md) reports that it
+was applied to Frankfurt. Subsequent live upload, replacement, and deletion
+checks are summarized in the
+[requirements coverage](final_submission_checklist.md). Those later checks
+are recorded as owner-reported, not independently repeated here.
 
-The upload parser, transactional ownership layer, authenticated API, and library
-page are implemented locally. **The proposal migration has not been applied. No
-Supabase connection or write, Render deployment, or production memory test was
-performed.** The 50,000-document corpus, Mindo, Sydney, and both evaluation
-question files were not changed or used by the chunk comparison. The held-out
-40-question candidates were not opened.
+## Initial implementation and safety checks
 
-Until the owner reviews and applies
-[`../migrations/proposals/phase6b_managed_uploads.sql`](../migrations/proposals/phase6b_managed_uploads.sql)
-to the dedicated Frankfurt Evidence_AI project, authenticated library reads and
-writes cannot operate against that database; the application returns a sanitized
-temporary-unavailable response if the table is missing.
+At the Phase 6B checkpoint, the parser, transactional ownership layer,
+authenticated API, and library page were implemented and tested locally.
+No production migration, Supabase write, or Render deployment took place
+*during that initial milestone*. The existing 50K corpus and evaluation
+datasets were not changed by the chunking comparison.
+
+The document API depends on the
+[managed-upload migration](../migrations/proposals/phase6b_managed_uploads.sql)
+and returns a sanitized temporary-unavailable response if that table
+is missing.
 
 ## Implementation
 
@@ -149,20 +156,25 @@ Run the complete suite and the strategy comparison from the repository root:
 ```
 
 The Phase 6B baseline passed **181 tests**. Phase 6B.1 results are recorded in
-[`phase6b_1_safety_review.md`](phase6b_1_safety_review.md). Existing tests cover UTF-8 parsing,
+[Phase 6B.1 safety review](archive/phase6b_1_safety_review.md). Existing tests cover UTF-8 parsing,
 text PDF/DOCX extraction, scanned-PDF rejection, malformed/empty/oversized
 files, chunk offsets, both chunkers,
 authentication, safe API errors, content deduplication, rollback, replacement,
 delete ownership, and retrieval of managed-upload provenance. The tests use
 fixtures/fakes and do not connect to Supabase.
 
-## Operator actions requiring approval
+## Original deployment checklist
 
-1. Review and approve the additive ownership-table migration, then apply it
-   manually to Frankfurt Evidence_AI. No migration was run in this milestone.
-2. Set a random 32+ character `ADMIN_TOKEN` as a local/Render secret; do not put
-   it in the repository or browser storage.
-3. Approve a separate production deployment and live CRUD/memory verification.
+These steps belonged to the initial implementation. Later reports describe
+progress on migration and live testing; **do not reapply the migration** just
+because it appears in this earlier checklist.
+
+1. Review the ownership-table migration and check the database's current
+   state before applying any schema change.
+2. Keep a random 32+ character `ADMIN_TOKEN` in local/Render secrets, never
+   in source control or browser storage.
+3. Verify upload, replacement, deletion, and resource use on the deployed
+   app. Repeated/concurrent memory checks remain a separate limitation.
 
 If the owner later rolls back the application code, leave the table and uploaded
 data in place. Dropping `managed_uploads` would remove ownership records and make

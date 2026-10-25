@@ -136,8 +136,12 @@ not used by the application.
 
 ## Verification notes
 
-Local API contract and scripted-agent tests exercise successful citation
-validation and abstention over HTTP. They do not substitute for a live Gemini
-quota check, live public Render request, Render memory measurement, or a
-post-idle cold-start test. See `reports/archive/phase4a_web_app.md` for the exact
-verified results and pending operator actions.
+Local tests cover the API, citation validation, and abstention. The
+[final evaluation](../EVALUATION_REPORT.md) records retrieval and answer
+quality. The [requirements coverage](../reports/final_submission_checklist.md)
+summarizes later live checks. Earlier web-app test results remain in the
+[archive](../reports/archive/phase4a_web_app.md).
+
+The exact deployed revision, provider quota remaining, and memory use during
+repeated or concurrent investigations have not been independently verified.
+A `/health` response checks process liveness, not Supabase or Gemini access.

@@ -1,326 +1,280 @@
 # EvidenceAI
 
-EvidenceAI is a Python app for investigating questions across multiple
-documents. It searches a 50,000-paragraph HotpotQA corpus using semantic and
-keyword retrieval, then uses a bounded Gemini agent to connect evidence and
-prepare answers with citations. Before returning a citation, it checks that
-the quoted text appears in the retrieved source.
+EvidenceAI is an AI investigation engine for questions that need information
+from more than one document. The goal is not to build another "chat with PDF"
+app: the system has to find relevant sources, connect facts, and explain where
+an answer came from.
 
-**Live demo:** [evidence-ai-frankfurt.onrender.com](https://evidence-ai-frankfurt.onrender.com/)
+It works with a **50,000-record HotpotQA corpus** and administrator-uploaded
+documents. Gemini drives the investigation using search tools, and the final
+answer includes quotes from the retrieved evidence. When the evidence is
+missing or conflicting, the system can report that instead of making up an
+answer.
 
-## Trying the demo
+**[Live demo](https://evidence-ai-frankfurt.onrender.com/)** ·
+[Evaluation results](EVALUATION_REPORT.md) ·
+[Architecture](docs/ARCHITECTURE.md)
 
-- The demo runs on Render Free. After about 15 minutes without traffic, the
-  first request can take around a minute while the service starts.
-- The main page lists **tested questions** in four groups: single source,
-  multi-source, not enough evidence, and conflicting. Each group describes the
-  scenario it tests. The conflicting examples are evaluation fixtures whose
-  evidence is not indexed in production; their results are in the
-  [evaluation report](EVALUATION_REPORT.md).
-- Each question is investigated independently; the app does not keep
-  conversation history between questions.
-- Investigations are rate-limited per IP address. If a limit message appears,
-  wait a minute and try again.
-- The [document library](https://evidence-ai-frankfurt.onrender.com/library)
-  requires the admin token. For evaluation, the token is provided in the
-  submission email. Uploaded documents become searchable from the main page.
+## Try the demo
 
-## Project structure
+Open the [investigation page](https://evidence-ai-frankfurt.onrender.com/),
+ask a question, and inspect the answer and its sources. You can choose between
+**Semantic**, **Keyword**, and **Hybrid** retrieval. Semantic is the default,
+based on the experiments described below.
 
-| Folder | What's inside |
+The page includes example questions for different investigation scenarios.
+The conflicting-evidence examples use synthetic evaluation fixtures that are
+**not part of the live indexed corpus**; their results are in the
+[evaluation report](EVALUATION_REPORT.md).
+
+There is also a [document library](https://evidence-ai-frankfurt.onrender.com/library)
+for uploading, inspecting, replacing, and deleting documents. These actions
+require an administrator token. For evaluation, the token is provided in
+the submission email. No token is stored in this repository.
+
+The app uses **Render Free**, so the first visit after inactivity can take
+about a minute to load. Investigations are rate-limited per IP (two requests
+per minute in the Render configuration); if you hit the limit, wait a minute
+before trying again. Each question is handled independently; it does not
+remember previous questions as a conversation.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[HotpotQA corpus or uploaded documents] --> B[Parse, deduplicate and chunk]
+    B --> C[Local embeddings and PostgreSQL full-text search]
+    C --> D[(Supabase PostgreSQL + pgvector)]
+    E[Question] --> F[Gemini investigation agent]
+    F --> G[Semantic / Keyword / Hybrid search]
+    G <--> D
+    G --> F
+    F --> H[Check cited chunks and exact quotes]
+    H --> I[Answer with sources / insufficient / conflicting]
+```
+
+1. **Prepare the documents.** The system accepts text-based **PDF, DOCX,
+   TXT, and Markdown** files, extracts text and metadata, supports two
+   chunking strategies, and deduplicates content while preserving its source
+   information. Scanned PDFs need OCR beforehand. Uploaded documents are
+   managed separately from the original corpus.
+
+   I compared two chunking strategies: **Paragraph** keeps paragraph
+   boundaries (splitting paragraphs over 1,000 characters for uploads);
+   **Fixed Overlap** uses 1,000-character windows with 150 characters of
+   overlap. On a 1,548-character fixture, Paragraph produced **4 chunks**
+   (1,542 stored characters) and Fixed Overlap produced **2 chunks**
+   (1,698 stored characters). Both covered **3/3 supporting sentences**
+   and achieved **1.00 Recall@1 and MRR** on that small fixture.
+   Paragraph is the default: it avoids duplicated overlap text, while fixed
+   windows keep neighbouring context but may cut through sentences.
+   This is a fixture comparison, not evidence of 50K-corpus retrieval
+   performance. [Full comparison](reports/document_ingestion.md).
+
+   Content hashes are based on normalized text. Identical corpus paragraphs
+   are stored once while their source references are retained.
+
+2. **Retrieve evidence.** FastEmbed creates 384-dimensional
+   `BAAI/bge-small-en-v1.5` embeddings, stored in Supabase with pgvector.
+   PostgreSQL full-text search provides the keyword results. Hybrid retrieval
+   merges both ranked lists through an in-project **Weighted Reciprocal Rank
+   Fusion (RRF)** implementation.
+
+3. **Investigate.** Gemini uses structured search-tool calls to follow
+   evidence across documents. An investigation allows up to four search steps
+   and five Gemini HTTP attempts, including retries. Request and output limits
+   keep the process bounded.
+
+   Timeouts, network failures, and server errors can be retried with a short
+   backoff within the remaining request and time budget. Repeated quota or
+   provider failures end the investigation; the API returns a clear, sanitized
+   error rather than a raw provider response.
+
+4. **Validate the answer.** Before accepting a citation, the system checks
+   that its chunk was retrieved during this investigation and that the exact
+   quote is present in the source. A matching quote verifies **source
+   presence**, not whether the model interpreted the relationship correctly.
+
+The 50,000 HotpotQA paragraphs were indexed separately; the web app does not
+rebuild the corpus on startup. The original indexed corpus is read-only during
+investigations.
+
+## Architecture decisions
+
+| Choice | Reason |
 | --- | --- |
-| [app/](app/) | The API, document processing, search, Gemini agent, citation checks, and web pages |
-| [scripts/](scripts/) | Commands for building the corpus, running evaluations, and troubleshooting |
-| [tests/](tests/) | Automated tests and sample upload files |
-| [eval/](eval/) | Development questions and the final 45-question evaluation set |
-| [migrations/](migrations/) | Database schema and migration proposals |
-| [docs/](docs/) | Technical design, data preparation, and implementation notes |
-| [reports/](reports/README.md) | Evaluation results, measurements, and earlier experiments |
+| **FastAPI** | The interface and Python API can run as one service. |
+| **Supabase PostgreSQL + pgvector** | Vector search, keyword search, source metadata, and persistent document storage stay in one database. |
+| **FastEmbed + halfvec(384)** | Local embeddings avoid an additional embedding API cost; halfvec uses less storage. |
+| **Weighted RRF** | Hybrid ranking is a clear, configurable component implemented in the project rather than outsourced entirely to a retrieval framework. |
+| **Gemini with bounded tools** | The model can search in several steps without unlimited tool calls or API usage. |
 
-Start with the [architecture overview](docs/ARCHITECTURE.md) if you want to
-understand how the parts fit together. The [evaluation report](EVALUATION_REPORT.md)
-covers what worked, what failed, and how the results were measured. AI assistance
-is documented in the [AI usage report](AI_USAGE_REPORT.md).
+I kept **Semantic** as the default because it performed better in the recorded
+30-question retrieval comparison, both in supporting-source recall and
+latency. Keyword and Hybrid are still implemented and selectable.
 
-## What it does
+I chose HotpotQA because its multi-hop questions require connecting evidence
+across documents, which fits this project better than single-document Q&A.
+The reproducible 50K subset uses the pinned
+[HotpotQA distractor train split](https://huggingface.co/datasets/hotpotqa/hotpot_qa)
+with sampling seed `42`. The selection includes the supporting passages for
+the selected development questions and answerable final cases. Synthetic
+conflict fixtures were kept out of the production index.
 
-- Accepts text-based PDFs, DOCX, TXT, and Markdown files. Scanned PDFs need
-  OCR beforehand; OCR is not built in.
-- Stores document text and source details so each retrieved passage can be
-  traced back to its document.
-- Offers semantic, keyword, and hybrid search.
-- Answers questions that may involve several sources, with quoted evidence
-  attached to the claims.
-- Returns insufficient evidence when it cannot support an answer, and can
-  flag conflicting claims found by the agent.
-- Restricts uploading, replacing, and deleting documents to administrators.
+The recorded ingestion reached **50,000 documents,
+50,018 source records, and 50,000 chunks**; the database was **290.47 MiB**
+after the final zero-insert check. Details are in
+[corpus preparation](docs/HOTPOTQA_CORPUS_BUILD.md) and the
+[50K capacity report](reports/capacity_50k.md).
 
-## Architecture
+## Evaluation
 
-Document ingestion path:
+Development questions were kept separate from the **45-case final set**:
+25 multi-hop, five single-hop, eight unanswerable, and seven synthetic
+conflict cases. The 38 non-conflict cases used the live investigation path;
+conflict cases used injected evidence with the agent and citation validator,
+without testing database retrieval.
 
-```mermaid
-flowchart LR
-  A[Corpus paragraphs or uploaded files] --> B[Validate and parse]
-  B --> C[Normalize and content-hash]
-  C --> D[Deduplicate and preserve provenance]
-  D --> E[Paragraph or fixed-overlap chunks]
-  E --> F[BGE 384-dimensional embeddings]
-  E --> G[English PostgreSQL full-text representation]
-  F --> H[Supabase PostgreSQL and pgvector]
-  G --> H
+| Measurement | Result |
+| --- | --- |
+| Semantic retrieval Recall@10 | **0.8833** on 30 answerable final cases |
+| Correct answer-span match | **19/30** answerable cases |
+| Multi-hop answer match | **14/25** cases |
+| Overall correct, including valid abstentions | **27/38** production-path cases |
+| Correct abstention | **8/8** synthetic unanswerable cases |
+| Conflict detection | **1/7** in the original run; **7/7** in a later post-fix rerun |
+| Valid exact-quote citations | **38/45** draft citations passed |
+
+The original 45-case run used **162 Gemini HTTP requests**. Semantic had the
+strongest retrieval results in the comparison, but that does not mean all
+answers were correct. For example, one multi-hop DHL question retrieved the
+supporting sources but connected the wrong people in the final answer.
+
+The seven-conflict rerun was a **post-hoc regression check**, not a new
+independent evaluation. Its fix was selected using separate development
+fixtures, not the final conflict cases.
+Answer generation was evaluated with Semantic only; Keyword and Hybrid were
+compared at the retrieval stage.
+
+Next steps are to make the agent check the entity relationship at each hop
+(the DHL failure), add an entailment check beyond exact-quote matching, and
+measure answer quality with Hybrid as well as Semantic.
+
+The
+[Evaluation Report](EVALUATION_REPORT.md) contains the complete metrics,
+methodology, failure cases, and latency results.
+
+## API
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/investigate` | Accepts `{question, retrieval_mode}`; returns status, answer, and cited claims. |
+| `/api/documents` | Upload, list, inspect, replace, and delete documents (admin Bearer token). |
+| `GET /` · `GET /library` | Investigation page and document library. |
+| `GET /health` | Process liveness. |
+
+## Run locally
+
+Use **Python 3.11**.
+
+**Windows (PowerShell):**
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+Copy-Item .env.example .env
 ```
 
-Investigation path:
+**macOS / Linux:**
 
-```mermaid
-flowchart LR
-  A[Question] --> B[Gemini agent]
-  B --> C[Search tool]
-  C --> D{Retrieval mode}
-  D --> E[Semantic pgvector]
-  D --> F[Keyword PostgreSQL FTS]
-  D --> G[Hybrid Weighted RRF]
-  E --> H[Evidence accumulated across bounded steps]
-  F --> H
-  G --> H
-  H --> I[Gemini final claims]
-  I --> J[Chunk ID and exact quote validator]
-  J --> K[Answer, insufficient evidence, or conflict]
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+cp .env.example .env
 ```
 
-The agent allows at most four investigation steps and five Gemini HTTP
-requests per investigation. A request cannot use more than five provider calls.
-The public investigation endpoint defaults to Semantic retrieval.
+Install dependencies, download the embedding model into the project cache,
+then start the app:
 
-## Technology choices
+```bash
+python -m pip install -r requirements-dev.txt
+python scripts/download_model.py
+python -m uvicorn app.main:app --reload
+```
 
-| Component | Choice | Reason |
-| --- | --- | --- |
-| API and pages | FastAPI, server-rendered HTML | One Python service serves JSON APIs and the interface. |
-| Database | Supabase PostgreSQL, pgvector | Durable relational provenance, vector similarity, and PostgreSQL FTS in one store. |
-| Embeddings | FastEmbed, BAAI/bge-small-en-v1.5 | Local query/document embeddings with 384 dimensions; no embedding API charge. |
-| Vector representation | halfvec(384), cosine distance, HNSW | Reduced vector storage with the existing cosine retrieval path. |
-| Keyword search | English PostgreSQL FTS, GIN | Stemming, stop-word handling, and title/body field weighting. |
-| Hybrid ranking | Project-owned weighted Reciprocal Rank Fusion | Combines independently ranked result lists with deterministic tie-breaking and duplicate handling. |
-| Answer generation | Configurable Gemini model; measured runs used gemini-3.5-flash-lite | Tool-capable generation bounded by request, time, and token limits. |
-| Hosting | Render Free web service; Frankfurt Supabase project | Public demo on the selected free hosting tiers. |
+Edit `.env` before using live investigations:
 
-### Retrieval modes and measured default
+- `DATABASE_URL` — connection string for the dedicated Frankfurt EvidenceAI
+  Supabase project. The app refuses another project identity.
+- `GEMINI_API_KEY` — Gemini API key, kept on the server.
+- `ADMIN_TOKEN` — a random secret of at least 32 characters, needed for
+  document management.
+- `INVESTIGATION_DAILY_BUDGET` — set a positive budget after checking
+  the available Gemini quota. The example value is `0`, which disables
+  investigation requests.
 
-- **Semantic:** BGE question embedding followed by pgvector cosine search.
-- **Keyword:** PostgreSQL English full-text search ranked with ts_rank_cd.
-- **Hybrid:** both lists combined with the in-project weighted RRF
-  implementation: each channel contributes weight / (k + rank), then stable
-  IDs break ties.
+Do not commit `.env` or expose credentials in the browser.
 
-Semantic is the default because it had the strongest measured retrieval
-Recall@10/MRR and lower latency in the recorded evaluations. On the same 30
-answerable final cases, Semantic had
-Recall@10 0.8833, MRR 0.9167, and 836.5 ms median retrieval; Keyword had 0.4333,
-0.3289, and 3,085.9 ms; equal-weight Hybrid had 0.8667, 0.8344, and 3,674.0 ms.
-Hybrid and Keyword remain available for explicit requests, demonstrations, and
-retrieval evaluation. These are retrieval metrics, not answer-accuracy scores.
-See [EVALUATION_REPORT.md](EVALUATION_REPORT.md) and the
-[retrieval tuning report](reports/retrieval_tuning_50k.md).
+Open `http://127.0.0.1:8000/` for investigations and
+`http://127.0.0.1:8000/library` for documents.
+`GET /health` checks process liveness, not database or model connectivity.
 
-### Provenance and citation checks
+### Reproduce the checks
 
-Chunks refer to canonical text by character offsets, so returned evidence is
-reconstructed from the original document. Each claim can cite retrieved chunk
-IDs and exact supporting quotes. The validator verifies that the chunk was in
-the retrieved evidence and that the quote appears verbatim after whitespace
-normalization. It rejects unknown chunks and unverified quotes.
+```bash
+python -m pytest -q
+python -m scripts.compare_chunking
+python -m scripts.evaluate_final
+```
 
-Quote matching proves evidence presence, not factual entailment. A valid quote
-can still be misapplied to a claim or a relationship, as the DHL failure in the
-evaluation report demonstrates.
+The full test suite runs offline without a `.env`, database connection, or
+downloaded embedding model. The last command is an **offline evaluation-plan check**, not a fresh Gemini
+evaluation. A read-only check of indexed evidence can be run with:
 
-## Corpus
+```bash
+python -m scripts.evaluate_final --check-indexed-coverage
+```
 
-The indexed corpus has 50,000 unique Wikipedia-paragraph records from the
-HotpotQA distractor train split. The reproducible source revision is
-1908d6afbbead072334abe2965f91bd2709910ab; sampling seed is 42. The generated
-corpus file is local and Git-ignored. The Phase 5 record reports 50,000
-documents, 50,018 provenance rows, 50,000 chunks, and a final database size of
-304,576,179 bytes (290.47 MiB) after the zero-insert verification. Its measured
-50,000-document projection with a 25% safety margin was 380,720,224 bytes.
-These are historical measurements from the recorded run, not a fresh database
-check. Details: [corpus audit](reports/corpus_audit.json) and
-[capacity report](reports/capacity_50k.md).
+Live evaluation requires explicit API-usage confirmation and a configured
+request budget; see [the methodology](reports/final_evaluation.md). To rebuild
+the local corpus from the pinned dataset without writing to Supabase:
 
-### Measured design decisions
+```bash
+python -m scripts.build_corpus --seed 42 --write-large-files
+```
 
-- Storing 384-dimensional embeddings as halfvec values used 38,800,000 bytes
-  for the 50K corpus (excluding row and HNSW overhead) in the recorded database
-  measurement.
-- Chunk offsets preserve a single canonical document body and were verified
-  against the corpus for Unicode-safe reconstruction.
-- The recorded Render model-startup check peaked at 300,912,640 bytes RSS
-  (287 MiB). That startup-only sample does not establish repeated or concurrent
-  investigation memory safety; see [the Render preflight report](reports/render_preflight.md).
+## Deployment and limitations
 
-The separate datasets are:
+The public app runs on **Render Free** in Frankfurt, backed by a persistent
+Frankfurt Supabase database. The
+[Render configuration](render.frankfurt.yaml) downloads the embedding model
+during the build. Deployments are manual, and credentials are managed as
+Render secrets.
 
-- 200 retrieval-development questions in eval/retrieval_dev.jsonl.
-- 45 final answer-evaluation cases in eval/final_answer_eval.jsonl.
-- 40 source candidates retained for reproducible selection and evidence
-  coverage, not as the completed final evaluation.
-
-The 40 held-out candidates were not used to tune retrieval or prompts. Final
-evaluation answers and retrieval-development questions remain separate.
-
-## Demonstrated investigations
-
-### Two-source answer
-
-On the live demo, “The company that oversees Cyma Watches was founded when?”
-returned **1894**, linking the Cyma Watches passage to a second passage about
-Universal Genève. The response cites two distinct chunks from two source
-documents. See [the demo record](docs/DEMO_WALKTHROUGH.md).
-
-### Documented historical insufficient response
-
-A production request for an updated managed TXT document returned
-INSUFFICIENT with no claims or citations even though the replacement content
-contained the answer. This was a **false abstention**, not a successful
-insufficient-evidence decision. A bounded exact-title semantic rescue was
-implemented and tested on development questions; after deployment, the same
-case returned an answer with a verified citation. The
-original response and diagnostic limits are documented in
-[the replacement retrieval report](reports/replacement_semantic_retrieval.md).
-Separately, the final evaluation correctly abstained on 8/8 synthetic
-unanswerable cases; see the methodology and limits in the evaluation report.
-
-## Local setup
-
-Requirements: Python 3.11 and the native dependencies needed by FastEmbed.
-
-1. Create and activate a virtual environment:
-   - Windows (PowerShell): <code>python -m venv .venv</code>, then
-     <code>.\.venv\Scripts\Activate.ps1</code>
-   - macOS/Linux: <code>python3 -m venv .venv</code>, then
-     <code>source .venv/bin/activate</code>
-2. Copy .env.example to .env only if .env is missing:
-   - Windows: <code>if (!(Test-Path .env)) { Copy-Item .env.example .env }</code>
-   - macOS/Linux: <code>cp -n .env.example .env</code>
-3. Install development requirements:
-   <code>python -m pip install -r requirements-dev.txt</code>
-4. Set
-   GEMINI_API_KEY, the Frankfurt EvidenceAI DATABASE_URL, and a random
-   server-side ADMIN_TOKEN with at least 32 characters. Never commit .env.
-   INVESTIGATION_DAILY_BUDGET=0 disables live investigations; select a positive
-   value only after checking the Gemini project's available quota.
-5. Start the app:
-   <code>python -m uvicorn app.main:app --reload</code>
-
-Useful local checks:
-
-- Full tests: <code>python -m pytest -q</code> (offline; no .env, database,
-  or downloaded model is needed)
-- Health endpoint: GET /health
-- Investigation page: GET /
-- Document library: GET /library
-- Investigation API: POST /api/investigate
-- Document management API: /api/documents (admin authentication required)
-
-The running application rejects a DATABASE_URL whose project reference does not
-match the configured Frankfurt EvidenceAI reference. Keep database and Gemini
-credentials server-side.
-
-## Reproduction
-
-Offline evaluation-plan audit (does not call Gemini):
-
-<code>python -m scripts.evaluate_final</code>
-
-Read-only Frankfurt project and indexed support-coverage check:
-
-<code>python -m scripts.evaluate_final --check-indexed-coverage</code>
-
-The live evaluation CLI requires explicit operator quota approval and
-confirmation; it uses local checkpoints and a request budget:
-
-<code>python -m scripts.evaluate_final --live --final --comparison-plan economical --confirm-api-usage</code>
-
-Rebuild the local HotpotQA corpus and retrieval-development file when needed:
-
-<code>python -m scripts.build_corpus --seed 42 --write-large-files</code>
-
-This command downloads the pinned public dataset and writes the large local
-corpus/evaluation artifact files; it does not write to Supabase. The corpus and
-caches are Git-ignored.
-
-Chunk strategy fixture comparison:
-
-<code>python -m scripts.compare_chunking</code>
-
-Historical intermediate reports are preserved under
-[reports/archive/](reports/archive/README.md).
-
-## Deployment and free-tier limits
-
-The live service is defined by [render.frankfurt.yaml](render.frankfurt.yaml):
-service evidence-ai-frankfurt in the Frankfurt region, manual deploys, a build
-step that caches the embedding model, and /health as a process-liveness check.
-[render.yaml](render.yaml) describes the earlier Sydney service and is kept for
-reference. Secrets and the investigation budget are set in the Render
-Dashboard, not in the repository.
-
-Render Free web services spin down after 15 minutes without inbound traffic and
-take about a minute to start on the next request. Their filesystems are
-ephemeral, and Free services may be restarted. The service configuration uses
-Render Free's 512 MiB memory class. One recorded model-startup sample was
-287 MiB; investigation peaks over repeated or concurrent requests remain
-unverified. The first-visit notice cannot appear until the app has served its
-initial HTML. See
-[Render Free service limits](https://render.com/docs/free).
-
-I did not add a scheduled keep-alive. /health reports only
-that the application process is alive; it does not touch Supabase. A scheduled
-ping cannot reliably keep a free Supabase project active, and GitHub schedules
-can be delayed or disabled. No public database-touch endpoint was introduced.
-For a live presentation, open the service shortly beforehand and allow the
-documented cold start.
-
-As of October 2026, Supabase lists 500 MB of Free database size; Free projects
-may pause after a week of inactivity, and the project disk allowance is a
-separate 2 GB limit. Database size and physical
-disk/WAL use must not be conflated. The recorded Phase 5 database size is below
-the listed database-size quota, but its physical disk usage was not verified
-from the Supabase Dashboard during ingestion. Plan limits can change; check
+Embeddings run locally, so **Gemini is the only metered model API** used by
+the investigation pipeline. A question can make up to five Gemini requests;
+the original 45-case evaluation used **162 requests**. The measured 50K
+database size was about **290 MiB**, compared with Supabase Free's
+**500 MB database-size allowance**. Free projects may pause after seven days
+of low activity. Database size and actual disk usage are different limits; see
 [Supabase pricing](https://supabase.com/pricing) and
-[database-size documentation](https://supabase.com/docs/guides/platform/database-size)
-before new bulk writes.
+[database-size details](https://supabase.com/docs/guides/platform/database-size).
 
-The application-wide investigation budget is process-local; it is not a
-restart-proof global quota shared across Render instances. The Frankfurt
-Blueprint leaves the value operator-managed. A per-process daily value of zero
-disables investigations; configure a positive budget only after checking
-Gemini project quota and reserving headroom for other callers.
+Free-tier constraints affect the design: cold starts, a 512 MiB memory class,
+and Gemini request quotas. The recorded model-startup peak was about
+**287 MiB**, but repeated/concurrent investigation memory use has not been
+fully verified. The request budget is process-local rather than a
+restart-proof distributed quota: the per-IP, daily, and concurrent limits
+are kept in each app process and reset after a restart. There is no OCR for
+scanned PDFs and no multi-turn conversation memory.
 
-## Known limitations
-
-- The final answer evaluation is a small 45-case set; answer-span correctness is
-  an automated proxy, not a human entailment judgment.
-- The final answer-generation results cover Semantic only. Keyword and Hybrid
-  were compared for retrieval, without extra Gemini answer generation.
-- Multi-hop relation binding remains error-prone. The DHL case retrieved its
-  support but chose Adrian Dalsey (whose own son was convicted) instead of
-  Larry Hillblom (whose business partner's son was convicted).
-- Conflict detection depends on model-produced conflict groups. The 7/7
-  post-hoc fixture rerun is a small, non-independent check, not a general
-  conflict-quality guarantee.
-- Exact quote validation does not prove factual entailment.
-- Only a startup memory sample was recorded on Render; memory under repeated or
-  concurrent investigations has not been measured.
-- Each question is investigated independently. Follow-up questions would need
-  a step that rewrites them into standalone questions before retrieval.
-- The 50,000-record database measurement is historical; the application has no
-  automatic 50K ingestion or schema migration at startup.
+For the implementation details, see
+[Architecture](docs/ARCHITECTURE.md).
+For measurement logs and experiment reports, see
+[Reports](reports/README.md).
 
 ## Submission documents
 
-- [Requirements coverage](reports/final_submission_checklist.md)
-- [Evaluation report](EVALUATION_REPORT.md)
-- [AI usage report](AI_USAGE_REPORT.md)
+- [Evaluation Report](EVALUATION_REPORT.md)
+- [AI Usage Report](AI_USAGE_REPORT.md)
+- [Assignment requirements coverage](reports/final_submission_checklist.md)

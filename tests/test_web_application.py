@@ -165,18 +165,18 @@ def test_page_and_health_show_corpus_and_cold_start_notice(web_client):
     assert web_client.get("/health").json() == {"status": "ok"}
 
 
-def test_example_picker_uses_three_live_questions_per_scenario_and_labeled_conflict_fixtures(web_client):
-    expected_questions = {
+def test_example_picker_uses_supported_live_examples_and_labeled_conflict_fixtures(web_client):
+    expected_evaluation_questions = {
         "What is the birth date of American fiction writer Maile Meloy?": "single",
         "How many passengers and crew were killed when Malaysia Airlines Flight 17 was shot down?": "single",
         "From which city and region are Stiff Little Fingers?": "single",
-        "What is the name of the co-founder of DHL whose business partner had a son convicted of manslaughter?": "multi",
         "Which Walt Disney film was produced first, \"So Dear to My Heart\" or \"The Jungle Book\"?": "multi",
         "What year was the man who wrote the music score for A Long Day's Journey into Night born?": "multi",
         "How many amber drones departed from the QX-EMBER-7719 station on 17 May?": "insufficient",
         "Which company manufactured the VARN-KESTREL-8831 engine?": "insufficient",
         "Who designed the TIDAL-MARBLE-1673 bridge?": "insufficient",
     }
+    cyma_question = "Which company oversees Cyma Watches, and when was it founded?"
     fixture_questions = [
         "At 14:00 UTC, was payment processing available or unavailable?",
         "How many jobs per minute did the Orion queue process?",
@@ -187,13 +187,14 @@ def test_example_picker_uses_three_live_questions_per_scenario_and_labeled_confl
         for line in Path("eval/final_answer_eval.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    selected_live_rows = [row for row in evaluation_rows if row["question"] in expected_questions]
+    selected_live_rows = [row for row in evaluation_rows if row["question"] in expected_evaluation_questions]
     selected_fixture_rows = [row for row in evaluation_rows if row["question"] in fixture_questions]
-    assert len(selected_live_rows) == len(expected_questions) == 9
+    assert len(selected_live_rows) == len(expected_evaluation_questions) == 8
+    assert all(row["question"] != cyma_question for row in evaluation_rows)
     assert len(selected_fixture_rows) == len(fixture_questions) == 3
     category_by_scenario = {"single": "single_hop", "multi": "multi_hop", "insufficient": "unanswerable"}
     assert {row["question"]: row["category"] for row in selected_live_rows} == {
-        question: category_by_scenario[group] for question, group in expected_questions.items()
+        question: category_by_scenario[group] for question, group in expected_evaluation_questions.items()
     }
     assert all(row["execution_mode"] == "live" for row in selected_live_rows)
     assert all(row["category"] == "conflicting" and row["execution_mode"] == "fixture"
@@ -220,7 +221,8 @@ def test_example_picker_uses_three_live_questions_per_scenario_and_labeled_confl
     page = web_client.get("/")
     parser = ExampleParser()
     parser.feed(page.text)
-    assert {item["question"]: item["group"] for item in parser.items} == expected_questions | {
+    expected_picker_questions = expected_evaluation_questions | {cyma_question: "multi"}
+    assert {item["question"]: item["group"] for item in parser.items} == expected_picker_questions | {
         question: "conflicting" for question in fixture_questions
     }
     assert len(parser.items) == 12
