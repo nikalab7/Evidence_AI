@@ -45,9 +45,14 @@ Answer generation plan: `economical`. Only the modes below were sent through Gem
 | Single-hop | 5 / 5 | 5 / 5 |
 | Unanswerable | 8 / 8 | not applicable |
 
-Conflict fixtures: 1 / 7 correctly detected (0.1429); predicted statuses: conflicting 1, insufficient 6, answered 0.
-The fixture agent made 23 Gemini requests and 9 tool calls; median/p95 latency 2631.6 ms / 3984.7 ms.
-Exact-quote presence checks accepted 14 / 14 draft citations. This does not establish that the model recognized or correctly explained the contradiction.
+| Conflict-fixture run | Correct conflict detections | Predicted statuses | Draft / verified citations | Gemini HTTP attempts | Median / p95 latency |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Original Phase 7.3 final run (frozen) | 1 / 7 | conflicting 1, insufficient 6, answered 0 | 14 / 14 | 23 | 2631.6 / 3984.7 ms |
+| After Phase 7.4 fix (post-hoc rerun) | 0 / 7 observed; inconclusive | conflicting 0, insufficient 7 (transport error), answered 0 | 0 / 0 | 14 attempts | 287.8 / 356.5 ms (failed attempts) |
+
+The second row is a separate run of only the seven final conflict fixtures, each attempted once with the retained Phase 7.4 build at commit `1c477d166664a37864eba947c73dcda18ecd25a1`. The fix was selected on development fixtures only; these final fixtures were not used to select or tune it. All seven investigations ended with the sanitized `upstream_network_error` (transport request errors): no model response was received, no tool calls ran, and no citations were drafted. The 14 request attempts (two per fixture) therefore do not provide an interpretable live conflict-detection score; the observed 0 / 7 is not evidence of a model regression or improvement. The latency figures are failed-attempt elapsed time. Provider receipt or billable quota use could not be confirmed. No retry was made. The per-fixture checkpoint remains local and Git-ignored at `reports/.phase7_4_final_conflict_results.jsonl`. The original Phase 7.3 result and the other 38 final cases remain unchanged.
+
+The original fixture run made 9 tool calls; exact-quote presence checks accepted 14 / 14 draft citations. This does not establish that the model recognized or correctly explained the contradiction.
 
 ## Metric definitions
 

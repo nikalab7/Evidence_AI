@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -182,4 +183,24 @@ def test_original_final_dataset_and_report_still_match_frozen_diagnosis():
     frozen = json.loads((root / "reports/phase7_4_diagnosis.json").read_text(encoding="utf-8"))
     for path, digest in frozen["frozen_files"].items():
         if (root / path).exists():
-            assert sha256_file(root / path) == digest
+            if path == "reports/final_evaluation.md":
+                report = (root / path).read_text(encoding="utf-8")
+                start = report.index("| Conflict-fixture run |")
+                end = report.index("\n## Metric definitions", start)
+                approved_addition = report[start:end]
+                assert hashlib.sha256(approved_addition.encode("utf-8")).hexdigest() == (
+                    "6fb9a14c0b7a88c945171b78576871684b129c3e5e34cf7d982cbe5ec8cfd319"
+                )
+                original_fixture_summary = (
+                    "Conflict fixtures: 1 / 7 correctly detected (0.1429); predicted statuses: "
+                    "conflicting 1, insufficient 6, answered 0.\n"
+                    "The fixture agent made 23 Gemini requests and 9 tool calls; median/p95 latency "
+                    "2631.6 ms / 3984.7 ms.\n"
+                    "Exact-quote presence checks accepted 14 / 14 draft citations. This does not "
+                    "establish that the model recognized or correctly explained the contradiction.\n"
+                )
+                restored_report = report[:start] + original_fixture_summary + report[end:]
+                restored_bytes = restored_report.replace("\n", "\r\n").encode("utf-8")
+                assert hashlib.sha256(restored_bytes).hexdigest() == digest
+            else:
+                assert sha256_file(root / path) == digest

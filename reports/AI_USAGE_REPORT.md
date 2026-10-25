@@ -401,3 +401,23 @@ Local planning and personal preparation notes are excluded from the repository.
 - The complete local suite passed 267 tests, including identical generation
   messages before/after the retained fix and strict handling of invalid central
   claims, unknown sources, failed quotations and exhausted budgets.
+
+### Phase 7.4 post-hoc final conflict-fixture check - 2026-10-25
+
+- With explicit operator approval, Codex ran only the seven existing final
+  conflict fixtures once through the retained build. It used the current
+  Frankfurt project identity guard and the shared rolling reservation ledger;
+  the process-local investigation ceiling was raised only enough to reserve
+  these seven cases because the existing 106 recent reservations exceeded the
+  unchanged local `.env` limit of 60. No `.env`, Render, database, or dataset
+  change was made.
+- The runner counted 14 Gemini HTTP attempts (two per fixture), but
+  all seven investigations ended with a sanitized `upstream_network_error`
+  before any model response, tool call, or citation. Provider receipt and
+  billable quota use are unknown. The call was not retried. This is an
+  inconclusive post-hoc regression attempt, not a model result and not a change
+  to the frozen 45-case evaluation. The isolated local checkpoint is ignored by
+  Git at `reports/.phase7_4_final_conflict_results.jsonl`.
+- The full local suite passed 267 tests. The frozen-report regression test was
+  adjusted to verify the original report hash after removing only the approved
+  post-hoc comparison block.
