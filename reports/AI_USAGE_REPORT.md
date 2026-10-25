@@ -189,3 +189,23 @@ Local planning and personal preparation notes are excluded from the repository.
   evidence chain to the README and an interview walk-through. No Render log
   access was available; the matching `investigation_memory` event remains
   pending and no timing or memory values were inferred for that request.
+
+## Phase 6B document management addition - 2026-10-25
+
+- Codex assistance was used to implement bounded PDF/DOCX/TXT/Markdown parsing,
+  two offset-preserving chunk strategies, admin-authenticated upload/list/
+  inspect/replace/delete endpoints, a minimal Document Library, and isolated
+  tests. The owner specified the document-management scope and production-data
+  safety boundary.
+- The proposed `managed_uploads` migration is additive and was not applied.
+  No Supabase connection, production read/write, Render deployment, or change to
+  the 50,000 indexed records was made. Neither held-out evaluation file was
+  opened. CRUD transaction behavior was verified with isolated fake resources;
+  the complete local test suite passed 181 tests.
+- The BGE chunking comparison ran locally against a small synthetic fixture
+  using the existing cached model. Both strategies covered and ranked all three
+  fixture evidence sentences; this is not a corpus retrieval-quality result.
+  Details and single-run timings are in `reports/document_ingestion.md`.
+- The complete test result and any remaining operational limitations are in
+  `reports/document_ingestion.md`; database grants/trigger behavior and Render
+  memory remain unverified pending explicit migration and deployment approval.

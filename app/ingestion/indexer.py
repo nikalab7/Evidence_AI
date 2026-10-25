@@ -6,7 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from app.ingestion.chunkers import PARAGRAPH_STRATEGY, paragraph_chunks
+from app.ingestion.chunkers import FIXED_OVERLAP_STRATEGY, PARAGRAPH_STRATEGY, chunk_spans
 from app.ingestion.corpus_core import content_hash, normalize_text
 from app.ingestion.deduplication import stable_chunk_id, stable_document_id, stable_source_id
 
@@ -14,8 +14,13 @@ from app.ingestion.deduplication import stable_chunk_id, stable_document_id, sta
 EXPECTED_DIMENSIONS = 384
 
 
-def prepare_document(record: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate a corpus row and retain text, metadata, aliases, and chunk positions."""
+def prepare_document(
+    record: Mapping[str, Any],
+    *,
+    chunking_strategy: str = PARAGRAPH_STRATEGY,
+    allow_empty_source_sentences: bool = False,
+) -> dict[str, Any]:
+    """Validate a source row and retain metadata plus canonical character offsets."""
     if not isinstance(record, Mapping):
         raise TypeError("corpus document must be an object")
     text = record.get("text")
@@ -41,7 +46,8 @@ def prepare_document(record: Mapping[str, Any]) -> dict[str, Any]:
             raise ValueError("source variants must be objects")
         title, sentences = variant.get("title"), variant.get("sentences")
         if (not isinstance(title, str) or not title.strip() or not isinstance(sentences, list)
-                or not sentences or not all(isinstance(sentence, str) for sentence in sentences)):
+                or (not sentences and not allow_empty_source_sentences)
+                or not all(isinstance(sentence, str) for sentence in sentences)):
             raise ValueError("source variant must include a title and sentence list")
         sources.append({
             "source_id": stable_source_id(doc_id, title, source, revision, split, sentences),
@@ -64,23 +70,23 @@ def prepare_document(record: Mapping[str, Any]) -> dict[str, Any]:
     }
     chunks = []
     search_from = 0
-    for position, chunk_text in enumerate(paragraph_chunks(text)):
-        start_char = text.find(chunk_text, search_from)
-        if start_char < 0:
-            raise ValueError("paragraph chunk cannot be located in canonical document text")
-        end_char = start_char + len(chunk_text)
+    for position, (start_char, end_char) in enumerate(chunk_spans(text, chunking_strategy)):
+        if start_char < search_from or end_char > len(text):
+            raise ValueError("chunk offsets are not ordered within canonical document text")
+        chunk_text = text[start_char:end_char]
         chunks.append({
-            "chunk_id": stable_chunk_id(doc_id, PARAGRAPH_STRATEGY, position, chunk_text),
+            "chunk_id": stable_chunk_id(doc_id, chunking_strategy, position, chunk_text),
             "doc_id": doc_id,
             "chunk_position": position,
-            "chunking_strategy": PARAGRAPH_STRATEGY,
+            "chunking_strategy": chunking_strategy,
             "start_char": start_char,
             "end_char": end_char,
             "chunk_text": chunk_text,
             "embedding": None,
             "embedding_model": None,
         })
-        search_from = end_char
+        search_from = (start_char + 1 if chunking_strategy == FIXED_OVERLAP_STRATEGY
+                       else end_char)
     return {
         "doc_id": doc_id,
         "content_hash": digest,

@@ -1,5 +1,307 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Document Library | EvidenceAI</title></head>
-  <body><main><h1>Document Library</h1><p>Document management interface is not implemented yet.</p></main></body>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b1220">
+    <title>Document Library | EvidenceAI</title>
+    <style>
+      :root { color-scheme:dark; --bg:#0b1220; --panel:#111c2e; --border:#26364d; --text:#edf4ff; --muted:#aabbd1; --accent:#73d2bd; --danger:#ff9a9a; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:radial-gradient(ellipse at 15% 0%,#18334a 0,transparent 42%),var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+      main { width:min(1040px,calc(100% - 30px)); margin:0 auto; padding:34px 0 60px; }
+      header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
+      header a { color:#9fe7d7; }
+      h1 { margin:0; font-size:clamp(1.9rem,5vw,2.6rem); letter-spacing:-.04em; }
+      h2 { margin:0 0 15px; font-size:1.2rem; }
+      .lead,.muted,footer { color:var(--muted); }
+      .lead { margin:8px 0 24px; }
+      .panel { border:1px solid var(--border); border-radius:16px; background:rgba(17,28,46,.94); padding:clamp(16px,3vw,24px); margin-top:16px; }
+      label { display:block; margin:10px 0 6px; font-weight:650; }
+      input,select,textarea { width:100%; padding:10px 12px; border:1px solid #3a4b63; border-radius:9px; background:#0c1626; color:var(--text); font:inherit; }
+      input[type=file] { padding:8px; }
+      textarea { min-height:86px; resize:vertical; }
+      input:focus,select:focus,textarea:focus,button:focus-visible,a:focus-visible { outline:3px solid #73d2bd88; outline-offset:2px; }
+      button { min-height:42px; border:0; border-radius:9px; padding:9px 15px; background:var(--accent); color:#08201c; font:inherit; font-weight:750; cursor:pointer; }
+      button.secondary { border:1px solid #52637b; background:#18273b; color:var(--text); }
+      button.danger { border:1px solid #844d58; background:#321d27; color:#ffdce0; }
+      button:disabled { opacity:.55; cursor:wait; }
+      .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; }
+      .form-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,.42fr); gap:12px; }
+      .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+      .status { min-height:24px; margin:12px 0 0; }
+      .status.error { color:#ffdce0; }
+      .status.success { color:#99e4cf; }
+      [hidden] { display:none !important; }
+      .document-list { display:grid; gap:10px; padding:0; list-style:none; }
+      .document { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; border:1px solid var(--border); border-radius:11px; padding:13px; background:#0c1626; }
+      .document-title { overflow-wrap:anywhere; font-weight:700; }
+      .document-meta { color:var(--muted); font-size:.85rem; }
+      .document-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+      .document-actions button { min-height:36px; padding:6px 10px; font-size:.9rem; }
+      .details { overflow-wrap:anywhere; }
+      pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid var(--border); border-radius:10px; padding:13px; background:#0a1321; }
+      code { font-size:.85em; }
+      footer { margin-top:24px; font-size:.84rem; }
+      @media(max-width:650px) { .row,.form-grid,.document { grid-template-columns:1fr; } .document-actions { justify-content:flex-start; } .row button { width:100%; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header><a href="/">← EvidenceAI investigations</a><span class="muted">Owner-managed library</span></header>
+      <h1>Document library</h1>
+      <p class="lead">Manage uploaded source documents. The original indexed corpus is protected and is not shown here.</p>
+
+      <section class="panel" aria-labelledby="auth-title">
+        <h2 id="auth-title">Administrator access</h2>
+        <p class="muted">Enter the server-configured admin token. It stays in this page's memory and is cleared when you log out or close the page.</p>
+        <form id="auth-form" class="row">
+          <div><label for="admin-token">Admin token</label><input id="admin-token" type="password" autocomplete="off" required></div>
+          <button id="auth-button" type="submit">Unlock library</button>
+        </form>
+        <p id="auth-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <div id="library" hidden>
+        <section class="panel" aria-labelledby="upload-title">
+          <h2 id="upload-title">Upload or replace a document</h2>
+          <p id="selection-hint" class="muted">Choose a supported file to add it as a new document.</p>
+          <form id="document-form">
+            <label for="document-file">PDF (text-based), DOCX, TXT, or Markdown</label>
+            <input id="document-file" name="file" type="file" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" required>
+            <div class="form-grid">
+              <div><label for="document-title">Title (optional)</label><input id="document-title" name="title" maxlength="300" autocomplete="off" placeholder="Use the file title when blank"></div>
+              <div><label for="chunking-strategy">Chunking strategy</label><select id="chunking-strategy" name="chunking_strategy"><option value="paragraph">Paragraph</option><option value="fixed_overlap">Fixed size with overlap</option></select></div>
+            </div>
+            <div class="actions">
+              <button id="upload-button" type="submit">Upload and index</button>
+              <button id="replace-button" class="secondary" type="button" disabled>Replace selected</button>
+              <button id="clear-selection" class="secondary" type="button" hidden>Clear selection</button>
+              <button id="logout-button" class="secondary" type="button">Lock library</button>
+            </div>
+          </form>
+          <p id="document-status" class="status" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" aria-labelledby="documents-title">
+          <div class="row"><div><h2 id="documents-title">Uploaded documents</h2><p class="muted">Only records with an owner-managed upload entry are listed.</p></div><button id="refresh-button" class="secondary" type="button">Refresh</button></div>
+          <ul id="document-list" class="document-list"></ul>
+          <p id="empty-list" class="muted" hidden>No managed documents have been uploaded yet.</p>
+        </section>
+
+        <section id="inspection" class="panel details" aria-labelledby="inspection-title" hidden>
+          <h2 id="inspection-title">Document details</h2>
+          <div id="inspection-meta" class="muted"></div>
+          <pre id="inspection-text"></pre>
+        </section>
+      </div>
+      <footer>Uploads are limited to 5 MiB and extracted text to 200,000 characters. Scanned image-only PDFs need text extraction before upload.</footer>
+    </main>
+
+    <script>
+      (() => {
+        let adminToken = "";
+        let selectedUploadId = "";
+        const authForm = document.getElementById("auth-form");
+        const tokenInput = document.getElementById("admin-token");
+        const authStatus = document.getElementById("auth-status");
+        const library = document.getElementById("library");
+        const documentForm = document.getElementById("document-form");
+        const fileInput = document.getElementById("document-file");
+        const titleInput = document.getElementById("document-title");
+        const strategyInput = document.getElementById("chunking-strategy");
+        const uploadButton = document.getElementById("upload-button");
+        const replaceButton = document.getElementById("replace-button");
+        const clearSelection = document.getElementById("clear-selection");
+        const selectionHint = document.getElementById("selection-hint");
+        const documentStatus = document.getElementById("document-status");
+        const list = document.getElementById("document-list");
+        const emptyList = document.getElementById("empty-list");
+        const inspection = document.getElementById("inspection");
+        const inspectionMeta = document.getElementById("inspection-meta");
+        const inspectionText = document.getElementById("inspection-text");
+
+        function message(node, text, kind = "") {
+          node.textContent = text;
+          node.className = `status ${kind}`;
+        }
+
+        function apiHeaders(extra = {}) {
+          return {"Authorization": `Bearer ${adminToken}`, ...extra};
+        }
+
+        async function api(path, options = {}) {
+          const response = await fetch(path, {...options, headers: apiHeaders(options.headers || {})});
+          const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const safeMessages = {
+              400: data.detail || "The document could not be processed.",
+              401: "Administrator token was not accepted. Enter it again.",
+              409: data.detail || "This document conflicts with existing indexed content.",
+              413: data.detail || "The request exceeds the upload size limit.",
+              415: data.detail || "This file format is not supported.",
+              503: data.detail || "Document storage is temporarily unavailable."
+            };
+            if (response.status === 401) lockLibrary(false);
+            throw new Error(safeMessages[response.status] || "The request could not be completed.");
+          }
+          return data;
+        }
+
+        function lockLibrary(showMessage = true) {
+          adminToken = "";
+          selectedUploadId = "";
+          library.hidden = true;
+          tokenInput.value = "";
+          replaceButton.disabled = true;
+          clearSelection.hidden = true;
+          inspection.hidden = true;
+          if (showMessage) message(authStatus, "Library locked. The admin token was cleared from this page.");
+        }
+
+        function selectDocument(doc) {
+          selectedUploadId = doc.upload_id;
+          replaceButton.disabled = !fileInput.files.length;
+          clearSelection.hidden = false;
+          selectionHint.textContent = `Replacing “${doc.title}” (${doc.original_filename}). Select a file and choose Replace selected.`;
+          titleInput.value = doc.title || "";
+          strategyInput.value = doc.chunking_strategy || "paragraph";
+          documentStatus.textContent = "";
+        }
+
+        async function inspectDocument(uploadId) {
+          const data = await api(`/api/documents/${encodeURIComponent(uploadId)}`);
+          const doc = data.document;
+          selectDocument(doc);
+          const fields = [
+            `Title: ${doc.title}`,
+            `Filename: ${doc.original_filename}`,
+            `Format: ${doc.file_format.toUpperCase()}`,
+            `Uploaded: ${doc.uploaded_at}`,
+            `Strategy: ${doc.chunking_strategy}`,
+            `Chunks: ${doc.chunk_count}`,
+            `Content ID: ${doc.doc_id}`,
+            `Provenance: ${doc.source_url} · ${doc.source_revision} · ${doc.source_split}`,
+            `Source evidence sentences: ${(doc.source_sentences || []).length}`,
+            `Parser metadata: ${JSON.stringify(doc.parser_metadata || {})}`
+          ];
+          inspectionMeta.textContent = fields.join("\n");
+          inspectionText.textContent = doc.text || "";
+          inspection.hidden = false;
+          inspection.scrollIntoView({behavior:"smooth", block:"start"});
+        }
+
+        function renderList(documents) {
+          list.replaceChildren();
+          emptyList.hidden = documents.length !== 0;
+          for (const doc of documents) {
+            const item = document.createElement("li");
+            item.className = "document";
+            const summary = document.createElement("div");
+            const title = document.createElement("div");
+            title.className = "document-title";
+            title.textContent = doc.title || doc.original_filename;
+            const meta = document.createElement("div");
+            meta.className = "document-meta";
+            meta.textContent = `${doc.original_filename} · ${doc.file_format.toUpperCase()} · ${doc.text_chars} chars · ${doc.chunk_count} chunks · ${doc.uploaded_at}`;
+            summary.append(title, meta);
+            const actions = document.createElement("div");
+            actions.className = "document-actions";
+            const inspectButton = document.createElement("button");
+            inspectButton.className = "secondary";
+            inspectButton.type = "button";
+            inspectButton.textContent = "Inspect / select";
+            inspectButton.addEventListener("click", () => inspectDocument(doc.upload_id).catch((error) => message(documentStatus, error.message, "error")));
+            const deleteButton = document.createElement("button");
+            deleteButton.className = "danger";
+            deleteButton.type = "button";
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener("click", async () => {
+              if (!window.confirm(`Delete the managed upload “${doc.title}”?`)) return;
+              try {
+                await api(`/api/documents/${encodeURIComponent(doc.upload_id)}`, {method:"DELETE"});
+                if (selectedUploadId === doc.upload_id) clearCurrentSelection();
+                message(documentStatus, "Managed upload deleted.", "success");
+                await refreshList();
+              } catch (error) { message(documentStatus, error.message, "error"); }
+            });
+            actions.append(inspectButton, deleteButton);
+            item.append(summary, actions);
+            list.append(item);
+          }
+        }
+
+        async function refreshList() {
+          const data = await api("/api/documents?limit=100&offset=0");
+          renderList(data.documents || []);
+        }
+
+        function clearCurrentSelection() {
+          selectedUploadId = "";
+          titleInput.value = "";
+          strategyInput.value = "paragraph";
+          fileInput.value = "";
+          replaceButton.disabled = true;
+          clearSelection.hidden = true;
+          selectionHint.textContent = "Choose a supported file to add it as a new document.";
+          inspection.hidden = true;
+        }
+
+        authForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          adminToken = tokenInput.value;
+          tokenInput.value = "";
+          if (!adminToken) { message(authStatus, "Enter the admin token.", "error"); return; }
+          try {
+            await refreshList();
+            library.hidden = false;
+            message(authStatus, "Administrator access verified.", "success");
+          } catch (error) {
+            if (adminToken) adminToken = "";
+            message(authStatus, error.message, "error");
+          }
+        });
+
+        fileInput.addEventListener("change", () => {
+          replaceButton.disabled = !selectedUploadId || !fileInput.files.length;
+        });
+
+        async function submitDocument(method, uploadId = "") {
+          const file = fileInput.files[0];
+          if (!file) { message(documentStatus, "Choose a file first.", "error"); return; }
+          const form = new FormData();
+          form.append("file", file, file.name);
+          form.append("title", titleInput.value);
+          form.append("chunking_strategy", strategyInput.value);
+          const target = uploadId ? `/api/documents/${encodeURIComponent(uploadId)}` : "/api/documents";
+          const button = method === "PUT" ? replaceButton : uploadButton;
+          button.disabled = true;
+          message(documentStatus, method === "PUT" ? "Replacing and indexing document…" : "Uploading and indexing document…");
+          try {
+            const data = await api(target, {method, body:form});
+            message(documentStatus, data.message || "Document saved.", "success");
+            fileInput.value = "";
+            await refreshList();
+            if (method === "PUT") await inspectDocument(data.document.upload_id);
+          } catch (error) { message(documentStatus, error.message, "error"); }
+          finally {
+            uploadButton.disabled = false;
+            replaceButton.disabled = !selectedUploadId || !fileInput.files.length;
+          }
+        }
+
+        documentForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (selectedUploadId) { message(documentStatus, "Use Replace selected to update the selected upload.", "error"); return; }
+          submitDocument("POST");
+        });
+        replaceButton.addEventListener("click", () => {
+          if (selectedUploadId) submitDocument("PUT", selectedUploadId);
+        });
+        clearSelection.addEventListener("click", clearCurrentSelection);
+        document.getElementById("refresh-button").addEventListener("click", () => refreshList().catch((error) => message(documentStatus, error.message, "error")));
+        document.getElementById("logout-button").addEventListener("click", () => lockLibrary(true));
+      })();
+    </script>
+  </body>
 </html>

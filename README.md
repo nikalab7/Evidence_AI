@@ -4,9 +4,9 @@ A Python-based investigation engine for finding, connecting, and citing evidence
 
 ## Current status
 
-Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
+Phase 0 through Phase 6A are implemented, including the staged 50,000-document Frankfurt corpus, multi-step Gemini investigation, citation validation, and retrieval tuning. Phase 6B document upload and management code is prepared locally. Its additive ownership-table migration is proposal-only; it has not been applied, and no live database write or production deployment was performed. The latest ingestion and capacity evidence is in [`reports/capacity_50k.md`](reports/capacity_50k.md); retrieval comparisons are in [`reports/retrieval_tuning_50k.md`](reports/retrieval_tuning_50k.md). The 200-question development set is the tuning dataset; the separate 40 candidates remain held out.
 
-This Phase 4A change adds a single-service FastAPI investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
+The single-service FastAPI application serves the investigation page and `POST /api/investigate`. Investigations use semantic retrieval by default; keyword and hybrid modes remain selectable. The API uses the existing four-step/five-HTTP-request agent and strips internal traces from public responses. The app includes process-local IP, concurrency, and daily-budget protection. The checked-in `INVESTIGATION_DAILY_BUDGET=0` remains the fail-closed default; the owner reports that the live service is configured for 10 investigations/day. These in-memory limits reset on process restart and are not a durable global quota.
 
 The owner has shared a successful live multi-hop answer for a question connecting Cyma Watches with Universal Genève. This demonstrates one reported public investigation, but Render deployment details, the corresponding memory log, quota availability, and repeated-request RSS behavior have not been independently verified in this workspace. See the [interview demo](docs/INTERVIEW_DEMO.md) and [Phase 4A.1 report](reports/phase4a_1_production_validation.md).
 
@@ -31,7 +31,7 @@ evidence-ai/
 │   ├── config.py               Environment configuration
 │   ├── api/
 │   │   ├── health.py           Working liveness route
-│   │   ├── documents.py        Placeholder
+│   │   ├── documents.py        Admin-authenticated document CRUD API
 │   │   ├── investigations.py   Validated investigation API
 │   │   └── pages.py            Server-rendered public interface
 │   ├── db/
@@ -42,8 +42,9 @@ evidence-ai/
 │   │   ├── corpus_store.py      Content hashes, aliases, and collision stats
 │   │   ├── corpus_selection.py  Fixed-seed stratified question selection
 │   │   └── hotpotqa_corpus.py   Local pinned corpus build and audit
-│   │   ├── parsers.py           Placeholder for file-upload ingestion
-│   │   ├── chunkers.py          Paragraph chunker for Phase 1C
+│   │   ├── parsers.py           Bounded PDF, DOCX, TXT, and Markdown parsing
+│   │   ├── chunkers.py          Paragraph and fixed-overlap offset strategies
+│   │   ├── managed_documents.py Transactional upload/index service
 │   │   ├── deduplication.py     Stable document, source, and chunk IDs
 │   │   └── indexer.py            Metadata preparation and local embeddings
 │   ├── retrieval/
@@ -63,10 +64,11 @@ evidence-ai/
 │   │   ├── metrics.py           Evidence-gated Recall@K and MRR
 │   │   └── run.py               Placeholder
 │   ├── templates/
-│   │   ├── library.html         Static notice
+│   │   ├── library.html         Authenticated Document Library
 │   │   └── investigate.html     Responsive investigation interface
 │   └── static/                  Inline page styling and behavior
 ├── migrations/schema.sql        Additive documents, provenance, chunks, FTS, and vector schema
+├── migrations/proposals/        Phase 6B ownership-table migration proposal
 ├── scripts/
 │   ├── audit_hotpotqa.py       Streaming uniqueness/evidence audit
 │   ├── build_corpus.py          Local corpus selection and coverage report
@@ -74,6 +76,7 @@ evidence-ai/
 │   ├── ingest_hotpotqa.py       Staged Supabase ingestion CLI capped at 50,000 documents
 │   ├── retrieve.py              Natural-language semantic/keyword/hybrid CLI
 │   ├── evaluate_retrieval.py    Evidence-gated real Supabase retrieval evaluation
+│   ├── compare_chunking.py      Local synthetic chunking/retrieval comparison
 │   └── measure_db_size.py       Read-only database/table size and row counts
 ├── tests/                       Automated tests
 ├── eval/                         Retrieval dev and eval candidate cases
@@ -127,9 +130,52 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python -m uvicorn app.main:app --reload
 ```
 
-The server runs at `http://127.0.0.1:8000`; `GET /` serves the interface, `POST /api/investigate` runs an investigation, and `GET /health` returns `{"status":"ok"}`. Health checks process liveness only. For local investigations, set a small positive `INVESTIGATION_DAILY_BUDGET` only after checking the configured Gemini project's quota. The default value `0` intentionally disables the API.
+The server runs at `http://127.0.0.1:8000`; `GET /` serves investigations, `GET /library` serves the Document Library, `POST /api/investigate` runs an investigation, and `GET /health` returns `{"status":"ok"}`. Health checks process liveness only. For local investigations, set a small positive `INVESTIGATION_DAILY_BUDGET` only after checking the configured Gemini project's quota. The default value `0` intentionally disables the API.
 
 Keep real credentials in `.env`, which Git ignores. `.env.example` contains names only. `connect_database()` refuses Supabase URLs that do not identify project `nldnpqhqrfwjgxcqeuru`; keep `DATABASE_URL` backend-only and configure the Frankfurt URI as a secret on the new Render service before deployment. `render.frankfurt.yaml` defines the separate service; the existing service is not replaced.
+
+## Phase 6B: document uploads and management
+
+The Document Library supports text-based PDF, DOCX, UTF-8 TXT, and Markdown
+uploads. Scanned/image-only PDFs are rejected with an OCR-required message.
+Uploads are limited to 5 MiB, extracted text to 200,000 characters, PDFs to 200
+pages, and DOCX packages to 20 MiB expanded size. Paragraph chunks and 1,000-
+character chunks with 150-character overlap both preserve offsets into the
+canonical text.
+
+All `/api/documents` routes, including list and inspect, require
+`Authorization: Bearer <ADMIN_TOKEN>`. The token stays only in the open page's
+memory and is cleared when the library is locked or the page closes. It is not
+written to browser storage or included in a URL. Configure a random token of at
+least 32 characters in `.env` locally and as a secret environment variable on
+Render. The example template intentionally leaves it blank.
+
+Content IDs are normalized text hashes. Identical content already in the index
+is rejected without adding upload ownership; replacement creates a new ID for
+changed content rather than editing text under the old ID. Upload provenance is
+recorded separately, and delete removes only that upload's provenance. A
+document still referenced by another source is retained. New chunks use the
+existing embeddings, FTS trigger, and semantic/keyword/hybrid queries, so the
+50,000-document corpus is not reindexed.
+
+Before the library can use Supabase, review and explicitly approve
+[`migrations/proposals/phase6b_managed_uploads.sql`](migrations/proposals/phase6b_managed_uploads.sql)
+and apply it manually to the Frankfurt Evidence_AI project. The application
+never runs this migration at startup. Do not deploy or write to production
+until the owner has approved and applied that additive migration and configured
+`ADMIN_TOKEN`. The local tests use fixtures and fakes; they do not verify live
+schema, database CRUD, or Render behavior.
+
+Run the local strategy comparison with:
+
+```powershell
+.\.venv\Scripts\python -m scripts.compare_chunking
+```
+
+It reads only a small synthetic fixture, loads BGE from the local cache without
+network access, and reports semantic Recall@1/MRR for three fixture queries.
+This is a reproducibility check, not a corpus-quality estimate. Results and
+memory/safety notes are in [`reports/document_ingestion.md`](reports/document_ingestion.md).
 
 ## Service probes
 

@@ -8,6 +8,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.lifespan import lifespan
 
 from app.api.health import router as health_router
+from app.api.documents import router as documents_router
 from app.api.investigations import router as investigations_router
 from app.api.pages import router as pages_router
 
@@ -22,20 +23,34 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(health_router)
+app.include_router(documents_router)
 app.include_router(pages_router)
 app.include_router(investigations_router)
 
 
-class InvestigationBodyLimitMiddleware:
-    """Cap JSON request buffering even when Content-Length is absent or false."""
+class RequestBodyLimitMiddleware:
+    """Bound request buffering for investigations and multipart document writes."""
 
     def __init__(self, app: ASGIApp, *, max_bytes: int = 16_384) -> None:
         self.app = app
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (scope["type"] != "http" or scope.get("path") != "/api/investigate"
-                or scope.get("method") != "POST"):
+        path, method = scope.get("path", ""), scope.get("method", "")
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        if path == "/api/investigate" and method == "POST":
+            body_limit = self.max_bytes
+            error_detail = "Investigation request body is too large."
+        elif (path == "/api/documents" and method == "POST"
+              or path.startswith("/api/documents/") and method == "PUT"):
+            # A single file is capped at 5 MiB; this allowance covers multipart
+            # boundaries and the short title/strategy fields.
+            body_limit = 5 * 1024 * 1024 + 64 * 1024
+            error_detail = "Document request body is too large."
+        else:
             await self.app(scope, receive, send)
             return
 
@@ -43,27 +58,28 @@ class InvestigationBodyLimitMiddleware:
         try:
             content_length = int(headers.get(b"content-length", b"0"))
         except ValueError:
-            content_length = self.max_bytes + 1
-        if content_length > self.max_bytes:
+            content_length = body_limit + 1
+        if content_length > body_limit:
             await JSONResponse(
-                status_code=413, content={"detail": "Investigation request body is too large."},
+                status_code=413, content={"detail": error_detail},
             )(scope, receive, send)
             return
 
         messages = []
         body_bytes = 0
         while True:
-            message = await receive()
-            if message["type"] == "http.request":
-                body_bytes += len(message.get("body", b""))
-                if body_bytes > self.max_bytes:
+            asgi_message = await receive()
+            if asgi_message["type"] == "http.request":
+                body_bytes += len(asgi_message.get("body", b""))
+                if body_bytes > body_limit:
                     await JSONResponse(
                         status_code=413,
-                        content={"detail": "Investigation request body is too large."},
+                        content={"detail": error_detail},
                     )(scope, receive, send)
                     return
-            messages.append(message)
-            if message["type"] == "http.disconnect" or not message.get("more_body", False):
+            messages.append(asgi_message)
+            if (asgi_message["type"] == "http.disconnect"
+                    or not asgi_message.get("more_body", False)):
                 break
 
         buffered = iter(messages)
@@ -77,7 +93,7 @@ class InvestigationBodyLimitMiddleware:
         await self.app(scope, replay_receive, send)
 
 
-app.add_middleware(InvestigationBodyLimitMiddleware)
+app.add_middleware(RequestBodyLimitMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
@@ -85,6 +101,6 @@ async def invalid_request_handler(_request: Request, _exc: RequestValidationErro
     return JSONResponse(
         status_code=422,
         content={
-            "detail": "Question request is invalid. Use 3-1000 characters and a supported retrieval mode.",
+            "detail": "The request is invalid. Check the required fields and supported values.",
         },
     )

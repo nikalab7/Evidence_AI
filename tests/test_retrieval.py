@@ -280,3 +280,28 @@ def test_metrics_handle_no_matching_results_and_reject_empty_evaluation_sets():
     assert score_question(question, []) == {"recall@5": 0.0, "recall@10": 0.0, "mrr": 0.0}
     with pytest.raises(ValueError, match="without eligible"):
         aggregate_retrieval_metrics([], {})
+
+
+def test_semantic_retrieval_includes_managed_upload_provenance():
+    class EmbeddingModel:
+        def query_embed(self, _queries):
+            return [[0.0] * 384]
+
+    class Connection:
+        def execute(self, *_args):
+            return self
+
+        def fetchall(self):
+            return [(
+                "upload-chunk", "c" * 64, 0, "Uploaded evidence text.", {},
+                [{"source_id": "upload-source", "title_alias": "Owner manual",
+                  "source_url": "upload://owner", "source_revision": "managed-upload-v1",
+                  "source_split": "managed_upload"}],
+                0.1,
+            )]
+
+    result = search(Connection(), "where is the evidence?", mode="semantic", limit=1,
+                    candidate_limit=1, model=EmbeddingModel())
+    assert result[0]["chunk_id"] == "upload-chunk"
+    assert result[0]["titles"] == ["Owner manual"]
+    assert result[0]["sources"][0]["source_split"] == "managed_upload"
