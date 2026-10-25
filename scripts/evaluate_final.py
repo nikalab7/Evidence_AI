@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.config import Settings
+from app.db.connection import EXPECTED_SUPABASE_PROJECT_REF, project_ref_from_database_url
 from app.llm.schemas import MAX_LLM_REQUESTS
 from app.evaluation.final_runner import (
     DEFAULT_LEDGER, DEFAULT_REPORT, DEFAULT_RESULTS, DEV_CASES, FINAL_CASES, MODES,
@@ -98,6 +99,44 @@ def _run_retrieval_only_comparison(
     answerable_cases = _answerable_live_cases(cases)
     if len(answerable_cases) != 30:
         raise ValueError("retrieval-only final comparison requires the 30 audited answerable cases")
+    settings = Settings.load()
+    if project_ref_from_database_url(settings.database_url) != EXPECTED_SUPABASE_PROJECT_REF:
+        raise RuntimeError("retrieval comparison requires the approved Frankfurt project")
+    expected_ids = {case["question_id"] for case in answerable_cases}
+    if details_path.exists():
+        cached = json.loads(details_path.read_text(encoding="utf-8"))
+        cached_ids = {
+            row.get("question_id") for row in cached.get("per_question", [])
+            if isinstance(row, dict)
+        }
+        expected_weights = {"semantic": 1.0, "keyword": 1.0, "rrf_k": 60}
+        if (
+            cached.get("dataset_sha256") == dataset_sha
+            and cached.get("database_project_ref", EXPECTED_SUPABASE_PROJECT_REF)
+                == EXPECTED_SUPABASE_PROJECT_REF
+            and cached.get("indexed_documents") == 50_000
+            and cached.get("dev_questions_total") == 30
+            and cached.get("eligible_questions") == 30
+            and cached.get("excluded_questions") == 0
+            and cached.get("top_k") == 10
+            and cached.get("candidate_k") == 20
+            and cached.get("hybrid_weights") == expected_weights
+            and cached_ids == expected_ids
+            and set(cached.get("metrics", {})) == set(MODES)
+            and set(cached.get("latency", {})) == set(MODES)
+        ):
+            return {
+                "status": "passed_cached",
+                "dataset_sha256": dataset_sha,
+                "database_project_ref": EXPECTED_SUPABASE_PROJECT_REF,
+                "indexed_documents": 50_000,
+                "eligible_questions": 30,
+                "top_k": 10,
+                "candidate_k": 20,
+                "hybrid_weights": expected_weights,
+                "metrics": cached["metrics"],
+                "latency": cached["latency"],
+            }
     details_path.parent.mkdir(parents=True, exist_ok=True)
     return run_evaluation(
         question_rows=answerable_cases,
@@ -245,6 +284,7 @@ def main() -> int:
                 answer_generation_modes=answer_modes,
                 retrieval_comparison=retrieval_comparison,
                 retrieval_results_path=args.retrieval_results,
+                stop_reason=report.get("stop_reason"),
             ), encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
         return 0

@@ -19,7 +19,7 @@ from app.evaluation.answer_metrics import case_quality, evidence_coverage
 from app.evaluation.metrics import aggregate_retrieval_metrics
 from app.evaluation.reporting import MODES, render_final_report
 from app.llm.agent import investigate
-from app.llm.gemini_client import GeminiClient
+from app.llm.gemini_client import GeminiAPIError, GeminiClient
 from app.llm.schemas import MAX_LLM_REQUESTS
 from app.llm.service import run_investigation
 from app.model_cache import load_model
@@ -228,7 +228,7 @@ def run_fixture_investigation(
     case: dict[str, Any], *, settings: Settings,
 ) -> dict[str, Any]:
     """Run the real agent and citation validator against isolated synthetic evidence."""
-    client = GeminiClient(settings)
+    client = GeminiClient(settings, stop_on_rate_limit=True)
     started = perf_counter()
     try:
         result = investigate(
@@ -394,6 +394,22 @@ def aggregate_results(
             status: sum(row.get("predicted_status") == status for row in mode_rows)
             for status in ("answered", "insufficient", "conflicting")
         }
+        category_summaries: dict[str, dict[str, Any]] = {}
+        for category in ("multi_hop", "single_hop", "unanswerable"):
+            category_rows = [row for row in mode_rows if row.get("category") == category]
+            if not category_rows:
+                continue
+            category_span_rows = [
+                row for row in category_rows if row.get("answer_span_match") is not None
+            ]
+            category_summaries[category] = {
+                "completed": len(category_rows),
+                "correct": sum(bool(row.get("answer_correctness")) for row in category_rows),
+                "answer_span_matches": sum(
+                    row.get("answer_span_match") is True for row in category_span_rows
+                ),
+                "answer_span_denominator": len(category_span_rows),
+            }
         evidence_references = sum(
             (row.get("supporting_evidence_coverage") or {}).get("support_references", 0)
             for row in mode_rows
@@ -434,6 +450,7 @@ def aggregate_results(
             "answer_correct_cases": correct,
             "overall_correctness_denominator": len(mode_rows),
             "predicted_status_counts": predicted_status_counts,
+            "category_summaries": category_summaries,
             "answer_span_match_rate": sum(row["answer_span_match"] is True for row in span_rows) / len(span_rows) if span_rows else None,
             "strict_exact_match_rate": sum(row["exact_match"] is True for row in span_rows) / len(span_rows) if span_rows else None,
             "answerable_cases_completed": len(span_rows),
@@ -461,12 +478,26 @@ def aggregate_results(
         }
     fixture_rows = [row for row in rows if row["execution_mode"] == "fixture"]
     fixture_correct = sum(row.get("predicted_status") == "conflicting" for row in fixture_rows)
+    fixture_latency = _percentile_summary([
+        row["latency_seconds"] for row in fixture_rows
+        if row.get("error_type") is None and isinstance(row.get("latency_seconds"), (int, float))
+    ])
     results["fixture_conflicts"] = {
         "scope": "agent and citation/conflict handling with injected synthetic evidence; no database retrieval",
         "expected": 7, "completed": len(fixture_rows),
         "failed_investigations": sum(row["error_type"] is not None for row in fixture_rows),
         "correct_conflict_detections": fixture_correct,
         "conflict_detection_accuracy": fixture_correct / len(fixture_rows) if fixture_rows else None,
+        "predicted_status_counts": {
+            status: sum(row.get("predicted_status") == status for row in fixture_rows)
+            for status in ("answered", "insufficient", "conflicting")
+        },
+        "api_requests": sum(row.get("api_request_count", 0) or 0 for row in fixture_rows
+                             if isinstance(row.get("api_request_count"), int)),
+        "tool_calls": sum(row.get("tool_call_count", 0) or 0 for row in fixture_rows),
+        "valid_citations": sum(row.get("verified_citation_count", 0) or 0 for row in fixture_rows),
+        "draft_citations": sum(row.get("draft_citation_count", 0) or 0 for row in fixture_rows),
+        "investigation_latency": fixture_latency,
     }
     return results
 
@@ -584,8 +615,13 @@ def _run_one(
             raw = run_investigation(
                 case["question"], settings=settings, model=model,
                 retrieval_mode=mode, capture_evaluation_details=True,
+                stop_on_rate_limit=True,
             )
         return raw, None
+    except GeminiAPIError as exc:
+        if exc.status == 429 or exc.reason == "provider_quota_exhausted":
+            raise
+        return None, type(exc).__name__
     except Exception as exc:
         return None, type(exc).__name__
 
@@ -647,13 +683,38 @@ def run_live(
         has_live = any(case["execution_mode"] == "live" for case, _, _ in pending)
         model = load_model("BAAI/bge-small-en-v1.5", threads=EVALUATION_THREADS) if has_live else None
         completed_this_run = 0
+        stop_reason = None
         for case, mode, run_key in pending:
             if not reserve_investigation(
                 ledger_path, run_key=run_key, case_id=case["case_id"], mode=mode,
                 daily_budget=settings.investigation_daily_budget,
             ):
                 break
-            raw, error_type = _run_one(case, mode, settings=settings, model=model)
+            try:
+                raw, error_type = _run_one(case, mode, settings=settings, model=model)
+            except GeminiAPIError as exc:
+                if exc.status != 429 and exc.reason != "provider_quota_exhausted":
+                    raise
+                error_type = "GeminiQuotaExhausted"
+                row = make_case_result(
+                    case, mode=mode, raw_result=None,
+                    dataset_sha256=dataset_sha256, model=model_name,
+                    error_type=error_type,
+                )
+                row["api_request_count"] = len(exc.request_metrics)
+                row["api_request_latencies_seconds"] = [
+                    metric["latency_seconds"] for metric in exc.request_metrics
+                    if isinstance(metric.get("latency_seconds"), (int, float))
+                ]
+                row["abstention_or_error_reason"] = "provider_quota_exhausted"
+                _append_jsonl(results_path, row)
+                existing[run_key] = row
+                completed_this_run += 1
+                stop_reason = (
+                    "gemini_http_429" if exc.status == 429
+                    else "gemini_provider_quota_exhausted"
+                )
+                break
             row = make_case_result(
                 case, mode=mode, raw_result=raw,
                 dataset_sha256=dataset_sha256, model=model_name, error_type=error_type,
@@ -664,7 +725,11 @@ def run_live(
         aggregate = aggregate_results(cases, list(existing.values()), modes)
         left = max(0, total_pending - completed_this_run)
         return {
-            "status": "complete" if left == 0 and not uncertain_keys else "partial_budget_or_interruption",
+            "status": (
+                "stopped_on_provider_quota" if stop_reason else
+                "complete" if left == 0 and not uncertain_keys else "partial_budget_or_interruption"
+            ),
+            "stop_reason": stop_reason,
             "completed_this_run": completed_this_run,
             "completed_total": len(existing), "pending_after_run": left,
             "uncertain_inflight_not_retried": len(uncertain_keys),

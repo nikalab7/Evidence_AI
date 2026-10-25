@@ -3,6 +3,7 @@ import json
 import pytest
 
 from app.llm.agent import investigate
+from app.llm.gemini_client import GeminiAPIError
 from app.llm.schemas import FunctionCall, LLMResponse
 
 
@@ -121,3 +122,31 @@ def test_agent_stops_at_four_tool_steps_and_five_http_requests(monkeypatch):
     assert len(result.trace["tool_calls"]) == 4
     assert [call["budget"] for call in llm.calls[:4]] == [4, 3, 2, 1]
     assert llm.calls[4]["schema"] is not None
+
+
+@pytest.mark.parametrize("failure_call", [1, 2])
+def test_evaluation_agent_propagates_provider_quota_exhaustion(failure_call):
+    class RateLimitedLLM:
+        stop_on_rate_limit = True
+        settings = type("Settings", (), {"gemini_model": "gemini-3.5-flash-lite"})()
+
+        def __init__(self):
+            self.calls = 0
+
+        def generate(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == failure_call:
+                raise GeminiAPIError(
+                    "provider_quota_exhausted",
+                    [{"attempt": 1, "latency_seconds": 0.1, "http_status": 429, "usage": {}}],
+                    status=429,
+                )
+            return LLMResponse("Ready", [], {"parts": [{"text": "Ready"}]}, _metric(0.1), {})
+
+    llm = RateLimitedLLM()
+    with pytest.raises(GeminiAPIError) as error:
+        investigate("Question?", conn=object(), embedding_model=object(), llm_client=llm)
+
+    assert error.value.status == 429
+    assert len(error.value.request_metrics) == 1
+    assert llm.calls == failure_call

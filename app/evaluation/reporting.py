@@ -34,6 +34,7 @@ def render_final_report(
     answer_generation_modes: tuple[str, ...] = ("semantic",),
     retrieval_comparison: dict[str, Any] | None = None,
     retrieval_results_path: Path | None = None,
+    stop_reason: str | None = None,
 ) -> str:
     """Render measured results without filling pending values with estimates."""
     aggregate = aggregate or {"modes": {}, "fixture_conflicts": {}}
@@ -125,6 +126,17 @@ def render_final_report(
             f"| {abstention} | {_format_rate(summary.get('citation_validity'))} "
             f"| {_format_rate(summary.get('supporting_evidence_coverage'))} |"
         )
+        if summary.get("draft_citations", 0):
+            lines.append(
+                f"- {mode.title()} citation validation: {summary.get('valid_citations', 0)} / "
+                f"{summary.get('draft_citations', 0)} draft citations passed exact-quote checks."
+            )
+        if summary.get("supporting_references_total", 0):
+            lines.append(
+                f"- {mode.title()} supporting evidence retrieved: "
+                f"{summary.get('supporting_references_retrieved', 0)} / "
+                f"{summary.get('supporting_references_total', 0)} references."
+            )
     for mode in answer_generation_modes:
         counts = aggregate.get("modes", {}).get(mode, {}).get("predicted_status_counts", {})
         if counts:
@@ -132,11 +144,56 @@ def render_final_report(
                 f"- {mode.title()} status counts: answered {counts.get('answered', 0)}, "
                 f"abstained {counts.get('insufficient', 0)}, conflicting {counts.get('conflicting', 0)}."
             )
+        category_summaries = aggregate.get("modes", {}).get(mode, {}).get("category_summaries", {})
+        if category_summaries:
+            labels = {
+                "multi_hop": "Multi-hop / cross-document",
+                "single_hop": "Single-hop",
+                "unanswerable": "Unanswerable",
+            }
+            lines += [
+                "",
+                "| Category | Correct / cases | Answer-span matches / scored |",
+                "| --- | ---: | ---: |",
+            ]
+            for category in ("multi_hop", "single_hop", "unanswerable"):
+                metrics = category_summaries.get(category)
+                if not metrics:
+                    continue
+                span_denominator = metrics.get("answer_span_denominator", 0)
+                span_value = (
+                    f"{metrics.get('answer_span_matches', 0)} / {span_denominator}"
+                    if span_denominator else "not applicable"
+                )
+                lines.append(
+                    f"| {labels[category]} | {metrics.get('correct', 0)} / {metrics.get('completed', 0)} "
+                    f"| {span_value} |"
+                )
     conflicts = aggregate.get("fixture_conflicts", {})
+    conflict_count = conflicts.get("completed", 0)
+    if conflict_count:
+        statuses = conflicts.get("predicted_status_counts", {})
+        latency = conflicts.get("investigation_latency") or {}
+        accuracy = conflicts.get("conflict_detection_accuracy")
+        accuracy_text = _format_rate(accuracy)
+        lines += [
+            "",
+            "Conflict fixtures: "
+            f"{conflicts.get('correct_conflict_detections', 0)} / {conflict_count} correctly detected "
+            f"({accuracy_text}); predicted statuses: conflicting {statuses.get('conflicting', 0)}, "
+            f"insufficient {statuses.get('insufficient', 0)}, answered {statuses.get('answered', 0)}.",
+            f"The fixture agent made {conflicts.get('api_requests', 0)} Gemini requests and "
+            f"{conflicts.get('tool_calls', 0)} tool calls; median/p95 latency "
+            f"{_format_latency(latency, 'median_seconds')} / "
+            f"{_format_latency(latency, 'p95_nearest_rank_seconds')}.",
+            f"Exact-quote presence checks accepted {conflicts.get('valid_citations', 0)} / "
+            f"{conflicts.get('draft_citations', 0)} draft citations. This does not establish "
+            "that the model recognized or correctly explained the contradiction.",
+        ]
+    else:
+        lines += ["", "Conflict fixture result: pending; no completed fixture rows."]
     lines += [
-        "", "Conflict fixture result: "
-        f"{conflicts.get('correct_conflict_detections', 0)} / {conflicts.get('completed', 0)} "
-        "correct detections; pending unless the isolated Gemini fixture run completed.", "",
+        "",
         "## Metric definitions", "",
         "- Retrieval Recall@5/10 and MRR are supporting-title metrics over deduplicated chunks "
         "returned by the investigation's search-tool calls in order, assigned a cumulative "
@@ -162,16 +219,21 @@ def render_final_report(
         f"- Completed result rows: {completed_cases}. The runner fsyncs each investigation "
         "reservation and result. On resume, an incomplete final JSONL row is discarded while its "
         "reservation remains uncertain; requests without a result are not automatically retried.",
+        f"- Measured Gemini HTTP requests in completed rows: "
+        f"{sum(summary.get('api_requests', 0) for summary in aggregate.get('modes', {}).values()) + conflicts.get('api_requests', 0)} "
+        f"(production-path investigations: "
+        f"{sum(summary.get('api_requests', 0) for summary in aggregate.get('modes', {}).values())}; "
+        f"conflict fixtures: {conflicts.get('api_requests', 0)}).",
+        f"- Batch stop reason: `{stop_reason or 'none'}`.",
         f"- Local result/checkpoint file: `{results_path}` (Git-ignored).",
         f"- Retrieval-only details: `{retrieval_results_path or 'pending'}` (Git-ignored); "
         "this stage makes database retrieval calls only and uses no Gemini generation.",
         f"- Local `INVESTIGATION_DAILY_BUDGET`: {daily_budget}; {budget_note} "
-        "The Frankfurt Blueprint value is `sync: false`; its production value and Gemini provider "
-        "quota were not accessible here. This CLI ledger only coordinates local evaluation runs; "
+        "The Frankfurt Blueprint value is `sync: false`; its production value was not accessible here. "
+        "This CLI ledger only coordinates local evaluation runs; "
         "it is not a durable global cap shared with Render.", "",
         "## Historical retrieval-only reference (200-question dev set)", "",
-        "These are previously measured Phase 6A retrieval results, not Phase 7 answer metrics "
-        "and not a substitute for the pending final comparison.", "",
+        "These are previously measured Phase 6A retrieval results, not Phase 7 answer metrics.", "",
         "| Mode / variant | Recall@5 | Recall@10 | MRR | Median latency | p95 latency |",
         "| --- | ---: | ---: | ---: | ---: | ---: |",
         "| Semantic | 0.8425 | 0.8775 | 0.927881 | 660.919 ms | 1,079.142 ms |",
@@ -241,6 +303,21 @@ def render_final_report(
         "final evaluation result.",
         "- A prior sandbox-only connection attempt failed before any Gemini call (0 requests); "
         "the authorized retry completed. Provider quota remaining could not be read from this workstation.",
-        "- No full final evaluation, production write, schema change, deployment, or held-out Gemini call was performed.", "",
     ]
+    if status == "complete":
+        lines += [
+            "- Phase 7 final evaluation completed: all 45 cases have result rows (38 production-path "
+            "cases and seven isolated conflict fixtures). No production writes, schema changes, "
+            "deployment, or out-of-scope held-out Gemini calls were performed.", "",
+        ]
+    elif completed_cases == 0:
+        lines += [
+            "- No full final evaluation has been executed. No production writes, schema changes, "
+            "deployment, or held-out Gemini calls were performed.", "",
+        ]
+    else:
+        lines += [
+            "- This report reflects a partial final evaluation. No production writes, schema changes, "
+            "deployment, or out-of-scope held-out Gemini calls were performed.", "",
+        ]
     return "\n".join(lines)

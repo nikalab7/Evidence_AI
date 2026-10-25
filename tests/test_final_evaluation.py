@@ -10,6 +10,7 @@ from app.evaluation.final_runner import (
     _failure_categories,
     _repair_incomplete_result_tail,
     _recent_reservations,
+    aggregate_results,
     audit_plan,
     build_run_key,
     make_case_result,
@@ -21,6 +22,7 @@ from app.evaluation.reporting import render_final_report
 from app.db.queries import read_indexed_source_evidence_for_references
 from app.evaluation.metrics import indexed_evidence_pairs
 from app.llm.agent import investigate
+from app.llm.gemini_client import GeminiAPIError
 from app.llm.schemas import FunctionCall, LLMResponse
 from scripts import prepare_final_eval as prepare
 from scripts import evaluate_final
@@ -144,6 +146,83 @@ def test_report_renders_sanitized_failure_diagnostics(tmp_path):
     assert "retrieval_miss" in report
     assert "1/2 support references" in report
     assert "Which report describes the delay?" in report
+
+
+def test_aggregate_and_report_include_conflict_results_and_all_gemini_requests(tmp_path):
+    cases = [
+        {
+            "case_id": "answer-1", "category": "multi_hop", "execution_mode": "live",
+            "expected_status": "answered", "supporting_evidence": [{"title": "A", "sentence": "S."}],
+        },
+        {
+            "case_id": "unknown-1", "category": "unanswerable", "execution_mode": "live",
+            "expected_status": "insufficient", "supporting_evidence": [],
+        },
+        {
+            "case_id": "conflict-1", "category": "conflicting", "execution_mode": "fixture",
+            "expected_status": "conflicting", "supporting_evidence": [],
+        },
+        {
+            "case_id": "conflict-2", "category": "conflicting", "execution_mode": "fixture",
+            "expected_status": "conflicting", "supporting_evidence": [],
+        },
+    ]
+    rows = [
+        {
+            "case_id": "answer-1", "category": "multi_hop", "execution_mode": "live",
+            "retrieval_mode": "semantic", "error_type": None, "answer_correctness": True,
+                "answer_span_match": True, "exact_match": False, "predicted_status": "answered",
+            "draft_citation_count": 1, "verified_citation_count": 1,
+            "supporting_evidence_coverage": {"support_references": 0, "support_references_retrieved": 0},
+            "failure_categories": [], "question": "Q?", "evidence_diagnostic": None,
+            "tool_call_count": 1, "api_request_count": 2, "latency_seconds": 1.0,
+            "retrieval_ranking_for_metrics": [],
+        },
+        {
+            "case_id": "unknown-1", "category": "unanswerable", "execution_mode": "live",
+            "retrieval_mode": "semantic", "error_type": None, "answer_correctness": True,
+            "answer_span_match": None, "exact_match": None, "predicted_status": "insufficient",
+            "draft_citation_count": 0, "verified_citation_count": 0,
+            "supporting_evidence_coverage": {"support_references": 0, "support_references_retrieved": 0},
+            "failure_categories": [], "question": "Unknown?", "evidence_diagnostic": None,
+            "tool_call_count": 1, "api_request_count": 1, "latency_seconds": 0.8,
+            "retrieval_ranking_for_metrics": [],
+        },
+        {
+            "case_id": "conflict-1", "category": "conflicting", "execution_mode": "fixture",
+            "retrieval_mode": "semantic", "error_type": None, "answer_correctness": True,
+            "answer_span_match": None, "predicted_status": "conflicting",
+            "draft_citation_count": 2, "verified_citation_count": 2,
+            "api_request_count": 3, "latency_seconds": 0.4, "tool_call_count": 1,
+        },
+        {
+            "case_id": "conflict-2", "category": "conflicting", "execution_mode": "fixture",
+            "retrieval_mode": "semantic", "error_type": None, "answer_correctness": False,
+            "answer_span_match": None, "predicted_status": "insufficient",
+            "draft_citation_count": 2, "verified_citation_count": 2,
+            "api_request_count": 4, "latency_seconds": 0.5, "tool_call_count": 2,
+        },
+    ]
+    aggregate = aggregate_results(cases, rows, ("semantic",))
+    report = render_final_report(
+        status="complete", aggregate=aggregate, completed_cases=4,
+        planned_investigations=45, results_path=tmp_path / "results.jsonl",
+        daily_budget=60,
+    )
+
+    assert aggregate["fixture_conflicts"]["correct_conflict_detections"] == 1
+    assert aggregate["fixture_conflicts"]["api_requests"] == 7
+    assert aggregate["fixture_conflicts"]["valid_citations"] == 4
+    assert aggregate["modes"]["semantic"]["answer_span_match_rate"] == 1.0
+    assert aggregate["modes"]["semantic"]["strict_exact_match_rate"] == 0.0
+    assert "Multi-hop / cross-document | 1 / 1 | 1 / 1" in report
+    assert "| Semantic | 2 / 2 | 1.0000 | 0.0000 |" in report
+    assert "Semantic citation validation: 1 / 1 draft citations passed exact-quote checks." in report
+    assert "1 / 2 correctly detected (0.5000)" in report
+    assert "7 Gemini requests" in report
+    assert "Measured Gemini HTTP requests in completed rows: 10 (production-path investigations: 3; conflict fixtures: 7)" in report
+    assert "pending unless the isolated Gemini fixture run completed" not in report
+    assert "Phase 7 final evaluation completed" in report
 
 
 def test_evidence_coverage_requires_matching_title_and_sentence():
@@ -284,6 +363,54 @@ def test_retrieval_only_cases_exclude_gold_answers_and_non_answerable_cases(monk
     assert observed["rrf_k"] == 60
     assert len(observed["question_rows"]) == 30
     assert all("gold_answer" not in case for case in observed["question_rows"])
+
+
+def test_retrieval_only_final_plan_reuses_matching_project_scoped_comparison_cache(monkeypatch, tmp_path):
+    cases = [
+        {
+            "case_id": f"answer-{index}", "category": "multi_hop",
+            "execution_mode": "live", "expected_status": "answered",
+            "question": f"Question {index}?", "gold_answer": "not passed to retrieval",
+            "supporting_evidence": [{"title": "T", "sentence": "Fact."}],
+        }
+        for index in range(30)
+    ]
+    modes = ("semantic", "keyword", "hybrid")
+    cache = {
+        "dataset_sha256": "final-dataset",
+        "indexed_documents": 50_000,
+        "dev_questions_total": 30,
+        "eligible_questions": 30,
+        "excluded_questions": 0,
+        "top_k": 10,
+        "candidate_k": 20,
+        "hybrid_weights": {"semantic": 1.0, "keyword": 1.0, "rrf_k": 60},
+        "metrics": {mode: {"question_count": 30, "recall@5": 1.0} for mode in modes},
+        "latency": {mode: {"median_ms": 10.0, "p95_nearest_rank_ms": 20.0} for mode in modes},
+        "per_question": [{"question_id": case["case_id"]} for case in cases],
+    }
+    details_path = tmp_path / "retrieval.json"
+    details_path.write_text(json.dumps(cache), encoding="utf-8")
+    monkeypatch.setattr(
+        evaluate_final, "Settings",
+        type("SettingsFactory", (), {
+            "load": staticmethod(lambda: Settings(
+                database_url="postgresql://user:pass@db.nldnpqhqrfwjgxcqeuru.supabase.co/postgres",
+            )),
+        }),
+    )
+    monkeypatch.setattr(
+        "scripts.evaluate_retrieval.run_evaluation",
+        lambda **_kwargs: pytest.fail("matching cached retrieval results must be reused"),
+    )
+
+    result = evaluate_final._run_retrieval_only_comparison(
+        cases, dataset_sha="final-dataset", details_path=details_path,
+    )
+
+    assert result["status"] == "passed_cached"
+    assert result["eligible_questions"] == 30
+    assert set(result["metrics"]) == set(modes)
 
 
 def test_retrieval_evaluation_can_fail_closed_on_an_unexpected_corpus_count(monkeypatch):
@@ -471,13 +598,85 @@ def test_live_runner_checkpoints_and_does_not_repeat_completed_call(tmp_path, mo
     assert second["status"] == "no_pending_cases"
     assert len(calls) == 1
     assert calls[0][0] == case["question"]
-    assert set(calls[0][1]) == {"settings", "model", "retrieval_mode", "capture_evaluation_details"}
+    assert set(calls[0][1]) == {
+        "settings", "model", "retrieval_mode", "capture_evaluation_details",
+        "stop_on_rate_limit",
+    }
     saved = json.loads(results.read_text(encoding="utf-8"))
     assert saved["supporting_evidence_coverage"]["coverage"] == 1.0
     assert "Published in 1957." not in json.dumps(saved)
     assert saved["api_request_count"] == 3
     assert saved["retrieval_ranking_for_metrics"][0]["investigation_rank"] == 1
     assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_live_runner_stops_on_rate_limit_checkpoints_request_and_resumes_after_it(tmp_path, monkeypatch):
+    import app.evaluation.final_runner as runner
+
+    cases = [
+        {
+            "case_id": f"case-{index}", "category": "single_hop",
+            "execution_mode": "live", "question": f"Question {index}?",
+            "gold_answer": "answer", "expected_status": "answered",
+            "supporting_evidence": [{"title": "Source", "sentence": "The answer is answer."}],
+        }
+        for index in (1, 2)
+    ]
+    settings = Settings(
+        database_url="postgresql://user:pass@db.nldnpqhqrfwjgxcqeuru.supabase.co/postgres",
+        gemini_api_key="test-key", investigation_daily_budget=5,
+    )
+    monkeypatch.setattr(runner, "load_model", lambda *_args, **_kwargs: object())
+    attempted = []
+
+    def rate_limited(case, _mode, **_kwargs):
+        attempted.append(case["case_id"])
+        raise GeminiAPIError(
+            "provider_quota_exhausted",
+            [{"attempt": 1, "latency_seconds": 0.1, "http_status": 429, "usage": {}}],
+            status=429,
+        )
+
+    results, ledger = tmp_path / "results.jsonl", tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(runner, "_run_one", rate_limited)
+    stopped = run_live(
+        cases=cases, modes=("semantic",), dataset_sha256="dataset-hash", settings=settings,
+        results_path=results, ledger_path=ledger,
+    )
+
+    assert attempted == ["case-1"]
+    assert stopped["status"] == "stopped_on_provider_quota"
+    assert stopped["stop_reason"] == "gemini_http_429"
+    assert stopped["completed_this_run"] == 1
+    assert stopped["pending_after_run"] == 1
+    saved = json.loads(results.read_text(encoding="utf-8").splitlines()[0])
+    assert saved["error_type"] == "GeminiQuotaExhausted"
+    assert saved["api_request_count"] == 1
+    assert saved["abstention_or_error_reason"] == "provider_quota_exhausted"
+
+    resumed_calls = []
+
+    def resume_remaining(case, _mode, **_kwargs):
+        resumed_calls.append(case["case_id"])
+        return {
+            "status": "answered", "answer": "answer", "central_claim_id": "c1",
+            "claims": [{"claim_id": "c1", "text": "answer", "citations": []}],
+            "trace": {
+                "api_usage": {"request_count": 1, "request_latencies_seconds": [0.1]},
+                "total_investigation_seconds": 0.2, "tool_calls": [],
+                "evaluation_retrieval_results": [],
+            },
+        }, None
+
+    monkeypatch.setattr(runner, "_run_one", resume_remaining)
+    resumed = run_live(
+        cases=cases, modes=("semantic",), dataset_sha256="dataset-hash", settings=settings,
+        results_path=results, ledger_path=ledger,
+    )
+
+    assert resumed_calls == ["case-2"]
+    assert resumed["completed_this_run"] == 1
+    assert resumed["completed_total"] == 2
 
 
 def test_failed_result_keeps_sanitized_error_reason():

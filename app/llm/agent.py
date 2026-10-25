@@ -80,6 +80,9 @@ def investigate(
             )
         except GeminiAPIError as exc:
             api_calls = record_requests(trace, api_calls, exc.request_metrics)
+            if (getattr(llm_client, "stop_on_rate_limit", False)
+                    and (exc.status == 429 or exc.reason == "provider_quota_exhausted")):
+                raise
             if exc.reason == "investigation_timeout" or (
                 deadline is not None and time.perf_counter() >= deadline
             ):
@@ -163,6 +166,9 @@ def investigate(
                 )
             except GeminiAPIError as exc:
                 api_calls = record_requests(trace, api_calls, exc.request_metrics)
+                if (getattr(llm_client, "stop_on_rate_limit", False)
+                        and (exc.status == 429 or exc.reason == "provider_quota_exhausted")):
+                    raise
                 if exc.reason == "investigation_timeout" or (
                     deadline is not None and time.perf_counter() >= deadline
                 ):

@@ -17,6 +17,7 @@ def run_investigation(question: str, *, settings: Settings | None = None, model:
                       retrieval_mode: RetrievalMode = "semantic",
                       capture_evaluation_details: bool = False,
                       search_function: Callable[..., list[dict[str, Any]]] | None = None,
+                      stop_on_rate_limit: bool = False,
                       ) -> dict[str, Any]:
     """Open one fail-closed Supabase connection and reuse it for every tool call."""
     settings = settings or Settings.load()
@@ -34,7 +35,9 @@ def run_investigation(question: str, *, settings: Settings | None = None, model:
         raise
     model_seconds = 0.0 if model is not None else perf_counter() - model_started
     owns_llm = llm_client is None
-    client = llm_client if llm_client is not None else GeminiClient(settings)
+    client = llm_client if llm_client is not None else GeminiClient(
+        settings, stop_on_rate_limit=stop_on_rate_limit,
+    )
     try:
         result = investigate(
             question, conn=conn, embedding_model=embedding_model, llm_client=client,

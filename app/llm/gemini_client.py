@@ -30,10 +30,12 @@ class GeminiClient:
     def __init__(
         self, settings: Settings, *, client: httpx.Client | None = None,
         timeout_seconds: float | None = None, max_retries: int = 1,
+        stop_on_rate_limit: bool = False,
     ):
         self.settings = settings
         self.timeout_seconds = timeout_seconds or settings.gemini_request_timeout_seconds
         self.max_retries = max_retries
+        self.stop_on_rate_limit = stop_on_rate_limit
         self._owns_client = client is None
         self.client = client or httpx.Client(timeout=self.timeout_seconds, follow_redirects=False)
 
@@ -88,8 +90,11 @@ class GeminiClient:
                 payload = response.json()
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
-                retryable = status == 429 or status >= 500
-                reason = "upstream_http_error"
+                quota_exhausted = status == 429 or _is_quota_exhaustion(exc.response)
+                retryable = (status >= 500 or (status == 429 and not self.stop_on_rate_limit))
+                if self.stop_on_rate_limit and quota_exhausted:
+                    retryable = False
+                reason = "provider_quota_exhausted" if quota_exhausted else "upstream_http_error"
             except httpx.TimeoutException:
                 retryable, reason = True, "upstream_timeout"
             except httpx.RequestError:
@@ -115,3 +120,21 @@ class GeminiClient:
                 raise GeminiAPIError("investigation_timeout", metrics, status) from None
             time.sleep(backoff)
         raise GeminiAPIError("request_budget_exhausted", metrics)
+
+
+def _is_quota_exhaustion(response: httpx.Response) -> bool:
+    """Recognize Google's quota error code without retaining or logging its body."""
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(payload, Mapping):
+        return False
+    error = payload.get("error")
+    return (
+        isinstance(error, Mapping)
+        and (
+            error.get("status") == "RESOURCE_EXHAUSTED"
+            or error.get("code") == 429
+        )
+    )

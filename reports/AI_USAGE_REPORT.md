@@ -353,3 +353,23 @@ Local planning and personal preparation notes are excluded from the repository.
 - The complete local suite passed 229 tests. See
   `reports/phase7_1_live_smoke.md` and `reports/final_evaluation.md` for
   measurements and reproduction commands.
+
+## Phase 7.3 final evaluation - 2026-10-25
+
+- Codex assistance was used to resume the existing final-evaluation checkpoint,
+  implement stop-on-provider-quota behavior for evaluation calls, and correct
+  final report aggregation for answer-span denominators, conflict fixtures, and
+  total Gemini request counts. The existing nine final investigations were not
+  rerun.
+- The authorized batch completed 36 additional investigations using 131 Gemini
+  HTTP requests. All 45 final cases now have results; 162 requests were recorded
+  across the full run. No 429, provider quota error, or investigation error was
+  returned. The operator supplied Tier 1 quota values; the runner did not query
+  the provider quota endpoint.
+- The retrieval-only comparison used the same 30 answerable final questions for
+  Semantic, Keyword, and Hybrid and made no Gemini generation requests. No
+  ranking or prompt tuning was performed against these held-out cases.
+- The final report distinguishes retrieval quality from answer correctness and
+  exact-quote presence from factual entailment. The complete local suite passed
+  236 tests. No production data, schema, Render configuration, or deployment
+  was changed. See `reports/final_evaluation.md` for measurements and limits.

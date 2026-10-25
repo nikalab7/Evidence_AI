@@ -18,7 +18,7 @@ import psycopg
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.db.connection import connect_database
+from app.db.connection import EXPECTED_SUPABASE_PROJECT_REF, connect_database
 from app.db.queries import read_indexed_source_evidence_for_references
 from app.embedding_smoke import MODEL_NAME
 from app.evaluation.metrics import (
@@ -219,6 +219,7 @@ def run_evaluation(
     if details_json is not None:
         details = {
             "dataset_sha256": dataset_sha256,
+            "database_project_ref": EXPECTED_SUPABASE_PROJECT_REF,
             "indexed_documents": indexed_documents,
             "dev_questions_total": len(questions),
             "eligible_questions": len(eligible),

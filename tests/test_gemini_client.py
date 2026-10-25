@@ -75,6 +75,34 @@ def test_request_budget_one_prevents_retry_and_errors_are_sanitized(monkeypatch)
     assert len(error.value.request_metrics) == 1
 
 
+@pytest.mark.parametrize(
+    ("status", "payload"),
+    [
+        (429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "private quota detail"}}),
+        (403, {"error": {"code": 403, "status": "RESOURCE_EXHAUSTED", "message": "private quota detail"}}),
+    ],
+)
+def test_evaluation_rate_limit_mode_stops_without_retry_or_body_leak(status, payload):
+    calls = []
+
+    def handler(_request):
+        calls.append(1)
+        return httpx.Response(status, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        client = GeminiClient(
+            Settings(gemini_api_key="key"), client=http, stop_on_rate_limit=True,
+        )
+        with pytest.raises(GeminiAPIError) as error:
+            client.generate([{"role": "user", "parts": [{"text": "hello"}]}], request_budget=5)
+
+    assert len(calls) == 1
+    assert error.value.reason == "provider_quota_exhausted"
+    assert error.value.status == status
+    assert len(error.value.request_metrics) == 1
+    assert "private quota detail" not in str(error.value)
+
+
 def test_structured_output_schema_is_sent_as_json_configuration():
     bodies = []
 
