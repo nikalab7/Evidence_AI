@@ -102,6 +102,7 @@
       .status { min-height: 24px; margin: 14px 0 0; font-size: .92rem; }
       .status.error { color: var(--red); }
       .status.success { color: var(--green-text); }
+      .status a { color: var(--green-text); font-weight: 600; text-underline-offset: 3px; }
 
       .document-list { display: grid; gap: 14px; margin: 18px 0 0; padding: 0; list-style: none; }
       .document { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 18px; border-radius: 16px; box-shadow: var(--inset-sm); }
@@ -131,14 +132,14 @@
       <header class="topbar">
         <div class="mark" aria-hidden="true">E</div>
         <div class="brand-name">EvidenceAI</div>
-        <nav aria-label="Main navigation"><a href="/">Investigate</a></nav>
+        <nav aria-label="Main navigation"><a id="investigate-link" href="/">Investigate</a></nav>
       </header>
       <h1>Document library</h1>
       <p class="lead">Manage uploaded source documents. The original indexed corpus is protected and is not shown here.</p>
 
         <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
         <h2 id="auth-title">Administrator access</h2>
-          <p id="auth-hint" class="muted">Enter the server-configured admin token. It stays in this page's memory and is cleared when you log out or close the page.</p>
+          <p id="auth-hint" class="muted">Enter the admin token. For evaluation, it is provided in the submission email. It stays in this page's memory and is cleared when you lock the library or close the page.</p>
         <form id="auth-form" class="row">
           <div><label for="admin-token">Admin token</label><input id="admin-token" type="password" autocomplete="off" required></div>
           <button id="auth-button" type="submit">Unlock library</button>
@@ -206,6 +207,18 @@
         const inspection = document.getElementById("inspection");
         const inspectionMeta = document.getElementById("inspection-meta");
         const inspectionText = document.getElementById("inspection-text");
+        const investigateLink = document.getElementById("investigate-link");
+
+        // The token lives only in this page, so while unlocked Investigate opens in a new tab
+        // and this tab stays signed in.
+        function keepLibraryOpen(unlocked) {
+          if (unlocked) {
+            investigateLink.target = "_blank";
+            investigateLink.rel = "noopener";
+          } else {
+            investigateLink.removeAttribute("target");
+          }
+        }
 
         function message(node, text, kind = "") {
           node.textContent = text;
@@ -241,6 +254,7 @@
           authForm.hidden = false;
           authHint.hidden = false;
           authPanel.classList.remove("is-unlocked");
+          keepLibraryOpen(false);
           tokenInput.value = "";
           replaceButton.disabled = true;
           clearSelection.hidden = true;
@@ -348,7 +362,8 @@
             authForm.hidden = true;
             authHint.hidden = true;
             authPanel.classList.add("is-unlocked");
-            message(authStatus, "Administrator access unlocked. Use Lock library to sign out.", "success");
+            keepLibraryOpen(true);
+            message(authStatus, "Administrator access unlocked. Investigate opens in a new tab, so this page stays unlocked. Use Lock library to sign out.", "success");
           } catch (error) {
             if (adminToken) adminToken = "";
             message(authStatus, error.message, "error");
@@ -373,6 +388,12 @@
           try {
             const data = await api(target, {method, body:form});
             message(documentStatus, data.message || "Document saved.", "success");
+            const askLink = document.createElement("a");
+            askLink.href = "/";
+            askLink.target = "_blank";
+            askLink.rel = "noopener";
+            askLink.textContent = "Ask a question about it";
+            documentStatus.append(" ", askLink);
             fileInput.value = "";
             await refreshList();
             if (method === "PUT") await inspectDocument(data.document.upload_id);

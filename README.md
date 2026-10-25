@@ -8,8 +8,22 @@ the quoted text appears in the retrieved source.
 
 **Live demo:** [evidence-ai-frankfurt.onrender.com](https://evidence-ai-frankfurt.onrender.com/)
 
-The demo URL and live examples were provided by the project owner. The current
-Render deployment has not been independently rechecked.
+## Trying the demo
+
+- The demo runs on Render Free. After about 15 minutes without traffic, the
+  first request can take around a minute while the service starts.
+- The main page lists **tested questions** in four groups: single source,
+  multi-source, not enough evidence, and conflicting. Each group describes the
+  scenario it tests. The conflicting examples are evaluation fixtures whose
+  evidence is not indexed in production; their results are in the
+  [evaluation report](EVALUATION_REPORT.md).
+- Each question is investigated independently; the app does not keep
+  conversation history between questions.
+- Investigations are rate-limited per IP address. If a limit message appears,
+  wait a minute and try again.
+- The [document library](https://evidence-ai-frankfurt.onrender.com/library)
+  requires the admin token. For evaluation, the token is provided in the
+  submission email. Uploaded documents become searchable from the main page.
 
 ## Project structure
 
@@ -158,14 +172,12 @@ evaluation answers and retrieval-development questions remain separate.
 
 ## Demonstrated investigations
 
-### Owner-reported two-source answer
+### Two-source answer
 
-The owner supplied a successful live response to “The company that oversees
-Cyma Watches was founded when?” The answer was **1894**, linking the Cyma
-Watches passage to a second passage about Universal Genève. The recorded
-evidence uses two distinct chunk IDs and source titles. This is an owner-reported
-production example, not an independently replayed request in this audit. See
-[the interview demo record](docs/INTERVIEW_DEMO.md).
+On the live demo, “The company that oversees Cyma Watches was founded when?”
+returned **1894**, linking the Cyma Watches passage to a second passage about
+Universal Genève. The response cites two distinct chunks from two source
+documents. See [the demo record](docs/DEMO_WALKTHROUGH.md).
 
 ### Documented historical insufficient response
 
@@ -173,8 +185,8 @@ A production request for an updated managed TXT document returned
 INSUFFICIENT with no claims or citations even though the replacement content
 contained the answer. This was a **false abstention**, not a successful
 insufficient-evidence decision. A bounded exact-title semantic rescue was
-implemented and tested on development questions; the owner later reported that
-the fix was deployed and the case answered with a verified citation. The
+implemented and tested on development questions; after deployment, the same
+case returned an answer with a verified citation. The
 original response and diagnostic limits are documented in
 [the replacement retrieval report](reports/replacement_semantic_retrieval.md).
 Separately, the final evaluation correctly abstained on 8/8 synthetic
@@ -185,10 +197,13 @@ unanswerable cases; see the methodology and limits in the evaluation report.
 Requirements: Python 3.11 and the native dependencies needed by FastEmbed.
 
 1. Create and activate a virtual environment:
-   <code>python -m venv .venv</code>
-   <code>.\.venv\Scripts\Activate.ps1</code>
+   - Windows (PowerShell): <code>python -m venv .venv</code>, then
+     <code>.\.venv\Scripts\Activate.ps1</code>
+   - macOS/Linux: <code>python3 -m venv .venv</code>, then
+     <code>source .venv/bin/activate</code>
 2. Copy .env.example to .env only if .env is missing:
-   <code>if (!(Test-Path .env)) { Copy-Item .env.example .env }</code>
+   - Windows: <code>if (!(Test-Path .env)) { Copy-Item .env.example .env }</code>
+   - macOS/Linux: <code>cp -n .env.example .env</code>
 3. Install development requirements:
    <code>python -m pip install -r requirements-dev.txt</code>
 4. Set
@@ -201,7 +216,8 @@ Requirements: Python 3.11 and the native dependencies needed by FastEmbed.
 
 Useful local checks:
 
-- Full tests: <code>python -m pytest -q</code>
+- Full tests: <code>python -m pytest -q</code> (offline; no .env, database,
+  or downloaded model is needed)
 - Health endpoint: GET /health
 - Investigation page: GET /
 - Document library: GET /library
@@ -240,19 +256,16 @@ Chunk strategy fixture comparison:
 <code>python -m scripts.compare_chunking</code>
 
 Historical intermediate reports are preserved under
-[reports/archive/](reports/archive/README.md); the detailed AI-assistance
-chronology is preserved in [reports/AI_USAGE_REPORT.md](reports/AI_USAGE_REPORT.md).
+[reports/archive/](reports/archive/README.md).
 
 ## Deployment and free-tier limits
 
-The intended Frankfurt Render Blueprint is
-[render.frankfurt.yaml](render.frankfurt.yaml), with service name
-evidence-ai-frankfurt, Frankfurt region, manual deploy, the model-cache build
-step, and /health as a process-liveness check. The older [render.yaml](render.yaml)
-is retained because the Dashboard's active Blueprint linkage was not accessible
-to this audit. Do not replace, sync, rename, or redeploy either service without
-checking the Render Dashboard and preserving its manual secrets and positive
-investigation budget.
+The live service is defined by [render.frankfurt.yaml](render.frankfurt.yaml):
+service evidence-ai-frankfurt in the Frankfurt region, manual deploys, a build
+step that caches the embedding model, and /health as a process-liveness check.
+[render.yaml](render.yaml) describes the earlier Sydney service and is kept for
+reference. Secrets and the investigation budget are set in the Render
+Dashboard, not in the repository.
 
 Render Free web services spin down after 15 minutes without inbound traffic and
 take about a minute to start on the next request. Their filesystems are
@@ -263,14 +276,14 @@ unverified. The first-visit notice cannot appear until the app has served its
 initial HTML. See
 [Render Free service limits](https://render.com/docs/free).
 
-The GitHub scheduled keep-alive workflow was not added. /health reports only
+I did not add a scheduled keep-alive. /health reports only
 that the application process is alive; it does not touch Supabase. A scheduled
 ping cannot reliably keep a free Supabase project active, and GitHub schedules
 can be delayed or disabled. No public database-touch endpoint was introduced.
 For a live presentation, open the service shortly beforehand and allow the
 documented cold start.
 
-At this audit date, Supabase lists 500 MB of Free database size; Free projects
+As of October 2026, Supabase lists 500 MB of Free database size; Free projects
 may pause after a week of inactivity, and the project disk allowance is a
 separate 2 GB limit. Database size and physical
 disk/WAL use must not be conflated. The recorded Phase 5 database size is below
@@ -299,14 +312,15 @@ Gemini project quota and reserving headroom for other callers.
   post-hoc fixture rerun is a small, non-independent check, not a general
   conflict-quality guarantee.
 - Exact quote validation does not prove factual entailment.
-- Render cold-start, current deployment commit, repeated/concurrent request
-  memory behavior, and live upload verification for all formats are not
-  independently confirmed by this packaging audit.
+- Only a startup memory sample was recorded on Render; memory under repeated or
+  concurrent investigations has not been measured.
+- Each question is investigated independently. Follow-up questions would need
+  a step that rewrites them into standalone questions before retrieval.
 - The 50,000-record database measurement is historical; the application has no
   automatic 50K ingestion or schema migration at startup.
 
 ## Submission documents
 
-- [Assignment compliance checklist](reports/final_submission_checklist.md)
+- [Requirements coverage](reports/final_submission_checklist.md)
 - [Evaluation report](EVALUATION_REPORT.md)
 - [AI usage report](AI_USAGE_REPORT.md)

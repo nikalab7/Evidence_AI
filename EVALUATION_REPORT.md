@@ -4,9 +4,8 @@
 
 The original 45-case final evaluation completed. This report preserves its
 Phase 7.3 measurements and separates a later seven-conflict post-hoc rerun.
-Metrics below are recorded results in
-[reports/final_evaluation.md](reports/final_evaluation.md), not new measurements
-from this packaging audit.
+Metrics below are the recorded results in
+[reports/final_evaluation.md](reports/final_evaluation.md).
 
 ## Dataset and separation
 

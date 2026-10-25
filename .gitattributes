@@ -1,1 +1,9 @@
 tests/fixtures/manual_upload_smoke/*.pdf binary
+
+# These evaluation inputs were hashed on Windows checkouts with CRLF line
+# endings, and their SHA-256 digests are recorded in manifests and reports.
+# Check them out with CRLF on every OS so the recorded digests stay valid.
+eval/final_answer_eval.jsonl text eol=crlf
+eval/final_answer_eval_manifest.json text eol=crlf
+eval/quality_dev_questions.jsonl text eol=crlf
+eval/quality_dev_fixtures.json text eol=crlf

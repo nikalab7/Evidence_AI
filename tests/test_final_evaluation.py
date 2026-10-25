@@ -351,6 +351,8 @@ def test_retrieval_only_cases_exclude_gold_answers_and_non_answerable_cases(monk
         return {"status": "passed", "eligible_questions": 30}
 
     monkeypatch.setattr("scripts.evaluate_retrieval.run_evaluation", fake_run_evaluation)
+    # Use a fake URL for the approved project so the test never depends on a local .env.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.nldnpqhqrfwjgxcqeuru.supabase.co/postgres")
     result = evaluate_final._run_retrieval_only_comparison(
         cases, dataset_sha="final-dataset", details_path=tmp_path / "nested" / "retrieval.json",
     )

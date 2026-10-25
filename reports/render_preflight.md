@@ -11,7 +11,7 @@ pipeline.
 
 ## Actual Render startup result
 
-Source: startup log supplied by the project owner.
+Source: Render startup log.
 
 | Measurement | Result |
 | --- | ---: |

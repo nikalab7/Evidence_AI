@@ -68,7 +68,9 @@ def test_process_rss_reader_returns_a_value_on_supported_platforms():
         assert peak_rss >= rss
 
 
-def test_public_api_serves_interface_and_health_without_schema_docs():
+def test_public_api_serves_interface_and_health_without_schema_docs(monkeypatch):
+    # Startup normally loads the cached embedding model; a fake keeps this test offline.
+    monkeypatch.setattr("app.lifespan.load_model", lambda *_args, **_kwargs: FakeModel())
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
         assert client.get("/health").json() == {"status": "ok"}

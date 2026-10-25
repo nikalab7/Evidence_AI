@@ -14,8 +14,7 @@ that context rather than treated as live performance statistics.
 - [Uploaded-document retrieval](replacement_semantic_retrieval.md) — a retrieval failure and its fix
 - [Quality investigation](phase7_4_quality_improvement.md) — citation rejection and conflict handling
 - [Render checks](render_preflight.md) — startup and memory observations
-- [Submission checklist](final_submission_checklist.md) — coverage of the assignment requirements
-- [AI usage notes](AI_USAGE_REPORT.md) — how AI tools were used during development
+- [Requirements coverage](final_submission_checklist.md) — how each assignment requirement is implemented and verified
 
 ## Data files
 
