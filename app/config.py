@@ -16,6 +16,7 @@ DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 class Settings:
     gemini_api_key: str = field(default="", repr=False)
     gemini_model: str = ""
+    gemini_thinking_level: str = ""  # empty = provider default (minimal for Gemini 3.5 Flash-Lite)
     database_url: str = field(default="", repr=False)
     admin_token: str = field(default="", repr=False)
     investigation_daily_budget: int = 0
@@ -34,10 +35,12 @@ class Settings:
             "investigation_max_concurrent": (1, 4),
             "investigation_timeout_seconds": (5, 300),
             "gemini_request_timeout_seconds": (1, 60),
-            "gemini_max_output_tokens": (128, 2048),
+            "gemini_max_output_tokens": (128, 8192),
             "database_statement_timeout_ms": (1_000, 60_000),
             "indexed_document_count": (1, 1_000_000),
         }
+        if self.gemini_thinking_level not in {"", "minimal", "low", "medium", "high"}:
+            raise ValueError("GEMINI_THINKING_LEVEL must be empty, minimal, low, medium, or high")
         for name, (minimum, maximum) in bounds.items():
             value = getattr(self, name)
             if type(value) is not int or not minimum <= value <= maximum:
