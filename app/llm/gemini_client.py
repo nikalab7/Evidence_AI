@@ -67,6 +67,7 @@ class GeminiClient:
         body = request_body(
             messages, tools, schema,
             max_output_tokens=self.settings.gemini_max_output_tokens,
+            thinking_level=self.settings.gemini_thinking_level,
         )
         metrics: list[dict[str, Any]] = []
         max_attempts = min(self.max_retries + 1, request_budget)
