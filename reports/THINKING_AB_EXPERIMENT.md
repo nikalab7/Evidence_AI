@@ -14,13 +14,14 @@ export GEMINI_MODEL=gemini-3.5-flash-lite
 export GEMINI_MAX_OUTPUT_TOKENS=4096
 export GEMINI_REQUEST_TIMEOUT_SECONDS=45
 export INVESTIGATION_TIMEOUT_SECONDS=180
+export INVESTIGATION_DAILY_BUDGET=10
 # Keep DATABASE_URL, GEMINI_API_KEY, and INVESTIGATION_DAILY_BUDGET on the approved private environment.
-python -m pytest -q tests/test_gemini_client.py
+python -m pytest -q tests/test_gemini_client.py tests/test_compare_thinking_runs.py
 ```
 
 ## Paid, read-only experiment (requires local credentials, corpus, indexed DB, and explicit API-use confirmation)
 
-Preflight `python -m scripts.evaluate_final` (offline, no Gemini request). The live final path also requires the locally regenerated 50K corpus/gold-evidence audit. Budget: 10 multi-hop cases per arm = 20 investigations, up to 100 Gemini HTTP attempts total; provider charges/quota may apply.
+Preflight `python -m scripts.evaluate_final` (offline, no Gemini request). The live final path also requires the locally regenerated 50K corpus/gold-evidence audit. Budget: **set INVESTIGATION_DAILY_BUDGET=10 for each arm**; 10 multi-hop cases per arm = 20 investigations, up to 100 Gemini HTTP attempts total; provider charges/quota may apply. The arms intentionally use separate ledgers because evaluation run keys do not include thinking level. Their independent limits sum to 20, so do not rerun with a fresh ledger without tracking total cost.
 
 **Arm A — baseline:**
 
