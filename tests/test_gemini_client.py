@@ -33,6 +33,7 @@ def test_function_call_request_uses_configured_model_and_header_secret():
     body = requests[0].read().decode()
     assert "systemInstruction" in body and "search_evidence" in body
     assert json.loads(body)["generationConfig"]["maxOutputTokens"] == 1024
+    assert "thinkingConfig" not in json.loads(body)["generationConfig"]
     assert result.function_calls[0].call_id == "call-1"
     assert result.usage["promptTokenCount"] == 10
     assert result.usage["candidatesTokenCount"] == 2
@@ -115,3 +116,43 @@ def test_structured_output_schema_is_sent_as_json_configuration():
         client.generate([{"role": "user", "parts": [{"text": "json"}]}], schema={"type": "OBJECT"})
     assert '"responseMimeType":"application/json"' in bodies[0]
     assert '"responseSchema":{"type":"OBJECT"}' in bodies[0]
+
+
+@pytest.mark.parametrize("schema", [None, {"type": "OBJECT"}])
+def test_configured_medium_thinking_is_sent_to_gemini_for_tools_and_final_json(schema):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.read()))
+        return httpx.Response(200, json={
+            "candidates": [{"content": {"parts": [{"text": "{}"}]}}],
+        })
+
+    settings = Settings(
+        gemini_api_key="test-key",
+        gemini_model="gemini-3.5-flash-lite",
+        gemini_thinking_level="medium",
+        gemini_max_output_tokens=4096,
+    )
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        client = GeminiClient(settings, client=http)
+        client.generate(
+            [{"role": "user", "parts": [{"text": "test"}]}],
+            schema=schema,
+            tools=[{"name": "search_evidence"}] if schema is None else None,
+        )
+
+    config = bodies[0]["generationConfig"]
+    assert config["maxOutputTokens"] == 4096
+    assert config["thinkingConfig"] == {"thinkingLevel": "medium"}
+    assert ("responseSchema" in config) is (schema is not None)
+
+
+def test_unknown_thinking_level_rejected():
+    with pytest.raises(ValueError, match="GEMINI_THINKING_LEVEL"):
+        Settings(gemini_thinking_level="aggressive")
+
+
+def test_thinking_level_loaded_from_environment():
+    settings = Settings.load(environ={"GEMINI_THINKING_LEVEL": "medium"})
+    assert settings.gemini_thinking_level == "medium"
