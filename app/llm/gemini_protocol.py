@@ -11,10 +11,12 @@ API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 def request_body(
     messages: Sequence[Mapping[str, Any]], tools: Any, schema: Any,
-    *, max_output_tokens: int = 1024,
+    *, max_output_tokens: int = 1024, thinking_level: str = "",
 ) -> dict[str, Any]:
-    if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 2048:
-        raise ValueError("max_output_tokens must be between 1 and 2048")
+    if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 8192:
+        raise ValueError("max_output_tokens must be between 1 and 8192")
+    if thinking_level not in {"", "minimal", "low", "medium", "high"}:
+        raise ValueError("unsupported Gemini thinking level")
     contents, system_parts = [], []
     for message in messages:
         role, parts = message.get("role"), message.get("parts")
@@ -28,6 +30,8 @@ def request_body(
         "contents": contents,
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": max_output_tokens},
     }
+    if thinking_level:
+        body["generationConfig"]["thinkingConfig"] = {"thinkingLevel": thinking_level}
     if system_parts:
         body["systemInstruction"] = {"parts": system_parts}
     if tools:
